@@ -1,30 +1,8 @@
 import * as net from "net";
 import { Message, HelloMessage } from "./interfaces";
-
-const requiredMessageKeys: { [key: string]: Array<string> } = {
-    "hello": ["type", "version"],
-    "error": ["type", "error"],
-    "getpeers": ["type"],
-    "peers": ["type", "peers"],
-    "getobject": ["type", "objectid"],
-    "ihaveobject": ["type", "objectid"],
-    "object": ["type", "object"],
-    "getmempool": ["type"],
-    "mempool": ["type", "txids"],
-};
-
-const optionalMessageKeys: { [key: string]: Array<string> } = {
-    "hello": ["agent"]
-};
+import { helloMessage, errorMessage, getPeersMessage, requiredMessageKeys, optionalMessageKeys } from "./messages";
 
 const PORT = 18080;
-const helloMessage = JSON.stringify({
-    "type": "hello",
-    "version": "0.8.0",
-    "agent": "Marabu-Core Client 0.8"
-});
-const getPeersMessage = JSON.stringify({"type": "getpeers"});
-const errorMessage = (errorMsg: string) => JSON.stringify({ "type": "error", "error": errorMsg });
 
 const onServerConnect = (socket: net.Socket) => {
     socket.setEncoding("utf8");
