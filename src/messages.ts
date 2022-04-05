@@ -19,5 +19,7 @@ export const helloMessage = JSON.stringify({
     "version": "0.8.0",
     "agent": "Marabu-Core Client 0.8"
 });
+
 export const getPeersMessage = JSON.stringify({"type": "getpeers"});
+export const peersMessage = (knownPeers: Array<string>) => JSON.stringify({ "type": "peers", "peers": knownPeers });
 export const errorMessage = (errorMsg: string) => JSON.stringify({ "type": "error", "error": errorMsg });

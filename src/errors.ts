@@ -1,4 +1,4 @@
-class InvalidMessageError extends Error {
+export class InvalidMessageError extends Error {
     constructor(msg?: string) {
         if (typeof(msg) !== undefined) {
             super(msg);
@@ -8,7 +8,7 @@ class InvalidMessageError extends Error {
     }
 }
 
-class InvalidHelloMessageError extends InvalidMessageError {
+export class InvalidHelloMessageError extends InvalidMessageError {
     constructor(msg?: string) {
         if (typeof(msg) !== undefined) {
             super(msg);
