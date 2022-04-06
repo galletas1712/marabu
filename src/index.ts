@@ -5,13 +5,13 @@ import { PeerHandler } from "./peerhandler";
 import { BOOTSTRAP_PEERS } from "./config";
 
 const args = process.argv.slice(2);
-const PEERS_DB = args[0];
-const SERVER_HOSTNAME = args[1];
-const SERVER_PORT = args[2];
+const peersDBPath = args[0];
+const serverHostname = args[1];
+const serverPort = args[2];
 
 const handleConnection = (socket: net.Socket, peersDB: level) => {
     const connIO = new ConnectedSocketIO(socket);
-    const peerHandler = new PeerHandler(connIO, peersDB, SERVER_HOSTNAME + ":" + SERVER_PORT);
+    const peerHandler = new PeerHandler(connIO, peersDB, serverHostname + ":" + serverPort);
     connIO.onConnect();
     socket.on("data", (data: string) => connIO.onData(data, peerHandler));
     socket.on("close", () => {
@@ -20,7 +20,7 @@ const handleConnection = (socket: net.Socket, peersDB: level) => {
 }
 
 const runNode = async () => {
-    const peersDB = new level(PEERS_DB);
+    const peersDB = new level(peersDBPath);
     for (const peer of BOOTSTRAP_PEERS) {
         await peersDB.put(peer, peer);
     }
@@ -28,7 +28,7 @@ const runNode = async () => {
     // Run Server
     console.log("Server starting");
     const server = net.createServer();
-    server.listen(SERVER_PORT);
+    server.listen(serverPort);
     server.on("connection", (socket: net.Socket) => handleConnection(socket, peersDB));
 
     // Run client
