@@ -35,229 +35,87 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var __asyncValues = (this && this.__asyncValues) || function (o) {
-    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-    var m = o[Symbol.asyncIterator], i;
-    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
-    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
-    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
-};
 exports.__esModule = true;
 var net = require("net");
-var messages_1 = require("./messages");
-var json_canonicalize_1 = require("json-canonicalize");
 var level_ts_1 = require("level-ts");
-var semver = require("semver");
-var PORT = 18018;
-var MYSELF = "45.77.189.193:" + PORT.toString();
-var BOOTSTRAP_PEERS = [
-    MYSELF
-    //   "149.28.220.241:18018",
-    //   "149.28.204.235:18018",
-    //   "139.162.130.195:18018",
-];
-var PEERS_DB = "../peers.list";
-var CURRENT_VERSION = "0.8.0";
-var ACCEPTABLE_VERSIONS = "0.8.x";
-var ConnectedSocketIO = /** @class */ (function () {
-    function ConnectedSocketIO(socket) {
-        this.socket = socket;
-        this.buffer = "";
-    }
-    ConnectedSocketIO.prototype.onConnect = function () {
-        this.socket.setEncoding("utf8");
-        this.writeToSocket({ type: "hello", version: CURRENT_VERSION, agent: "Marabu-Core Client 0.8" });
-    };
-    ConnectedSocketIO.prototype.onData = function (data, peerHandler) {
-        console.log("Received raw:", data);
-        var tokens = data.split(/(?=[\n])|(?<=[\n])/g);
-        for (var _i = 0, tokens_1 = tokens; _i < tokens_1.length; _i++) {
-            var token = tokens_1[_i];
-            this.buffer += token;
-            if (token === "\n") {
-                peerHandler.onMessage(this.buffer);
-                this.buffer = "";
-            }
-        }
-    };
-    ConnectedSocketIO.prototype.writeToSocket = function (msg) {
-        console.log("Writing:", msg);
-        this.socket.write((0, json_canonicalize_1.canonicalize)(msg) + "\n");
-    };
-    ConnectedSocketIO.prototype.disconnectWithError = function (err) {
-        console.log("Disconnecting from:", this.socket.address);
-        this.writeToSocket({ type: "error", error: err });
-        this.socket.destroy();
-    };
-    return ConnectedSocketIO;
-}());
-var PeerHandler = /** @class */ (function () {
-    function PeerHandler(connIO, peersDB) {
-        this.connIO = connIO;
-        this.finishedHandshake = false;
-        this.peersDB = peersDB;
-    }
-    PeerHandler.prototype.onMessage = function (msgStr) {
-        var message = this.validateMessage(msgStr);
-        if (messages_1.MessageRecord.guard(message)) {
-            this.handleMessage(message);
-        }
-    };
-    PeerHandler.prototype.validateMessage = function (msgStr) {
-        var deserialized;
-        try {
-            deserialized = JSON.parse(msgStr);
-        }
-        catch (e) {
-            this.connIO.disconnectWithError("Unable to parse message JSON: ".concat(e));
-            return undefined;
-        }
-        var message;
-        try {
-            message = messages_1.MessageRecord.check(deserialized);
-        }
-        catch (e) {
-            this.connIO.disconnectWithError("Invalid message format: ".concat(e));
-            return undefined;
-        }
-        if (!this.finishedHandshake && message.type !== "hello") {
-            this.connIO.disconnectWithError("Other message sent before hello message");
-            return undefined;
-        }
-        return message;
-    };
-    PeerHandler.prototype.handleMessage = function (msg) {
-        if (msg.type == "hello") {
-            this.onHelloMessage(msg);
-        }
-        else if (msg.type == "getpeers") {
-            this.onGetPeersMessage(msg);
-        }
-        else if (msg.type == "peers") {
-            this.onPeersMessage(msg);
-        }
-        else {
-            this.echo(msg);
-        }
-    };
-    PeerHandler.prototype.onHelloMessage = function (msg) {
-        if (!semver.satisfies(msg.version, ACCEPTABLE_VERSIONS)) {
-            this.connIO.disconnectWithError("version not acceptable");
-            return;
-        }
-        this.finishedHandshake = true;
-        console.log("Completed handshake");
-        this.connIO.writeToSocket({ type: "getpeers" });
-    };
-    PeerHandler.prototype.onGetPeersMessage = function (msg) {
-        var e_1, _a;
-        return __awaiter(this, void 0, void 0, function () {
-            var knownPeers, iterator, iterator_1, iterator_1_1, key, e_1_1;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
-                    case 0:
-                        knownPeers = [MYSELF];
-                        iterator = this.peersDB.iterate({});
-                        _b.label = 1;
-                    case 1:
-                        _b.trys.push([1, 6, 7, 12]);
-                        iterator_1 = __asyncValues(iterator);
-                        _b.label = 2;
-                    case 2: return [4 /*yield*/, iterator_1.next()];
-                    case 3:
-                        if (!(iterator_1_1 = _b.sent(), !iterator_1_1.done)) return [3 /*break*/, 5];
-                        key = iterator_1_1.value.key;
-                        console.log("pushing...", key);
-                        knownPeers.push(key);
-                        _b.label = 4;
-                    case 4: return [3 /*break*/, 2];
-                    case 5: return [3 /*break*/, 12];
-                    case 6:
-                        e_1_1 = _b.sent();
-                        e_1 = { error: e_1_1 };
-                        return [3 /*break*/, 12];
-                    case 7:
-                        _b.trys.push([7, , 10, 11]);
-                        if (!(iterator_1_1 && !iterator_1_1.done && (_a = iterator_1["return"]))) return [3 /*break*/, 9];
-                        return [4 /*yield*/, _a.call(iterator_1)];
-                    case 8:
-                        _b.sent();
-                        _b.label = 9;
-                    case 9: return [3 /*break*/, 11];
-                    case 10:
-                        if (e_1) throw e_1.error;
-                        return [7 /*endfinally*/];
-                    case 11: return [7 /*endfinally*/];
-                    case 12: return [4 /*yield*/, iterator.end()];
-                    case 13:
-                        _b.sent();
-                        this.connIO.writeToSocket({ type: "peers", peers: knownPeers });
-                        return [2 /*return*/];
-                }
-            });
-        });
-    };
-    PeerHandler.prototype.onPeersMessage = function (msg) {
-        return __awaiter(this, void 0, void 0, function () {
-            var _this = this;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, Promise.all(msg.peers.map(function (peer) { return __awaiter(_this, void 0, void 0, function () {
-                            return __generator(this, function (_a) {
-                                switch (_a.label) {
-                                    case 0: return [4 /*yield*/, this.peersDB.exists(peer)];
-                                    case 1:
-                                        if (!!(_a.sent())) return [3 /*break*/, 3];
-                                        return [4 /*yield*/, this.peersDB.put(peer, false)];
-                                    case 2:
-                                        _a.sent(); // Peer is not connected because it's not known
-                                        _a.label = 3;
-                                    case 3: return [2 /*return*/];
-                                }
-                            });
-                        }); }))];
-                    case 1:
-                        _a.sent();
-                        return [2 /*return*/];
-                }
-            });
-        });
-    };
-    PeerHandler.prototype.echo = function (msg) {
-        console.log("Received ".concat(msg.type, " message but not doing anything."));
-    };
-    return PeerHandler;
-}());
-var handleConnectedSocket = function (socket, peersDB) {
-    var connIO = new ConnectedSocketIO(socket);
-    var peerHandler = new PeerHandler(connIO, peersDB);
+var socketio_1 = require("./socketio");
+var peerhandler_1 = require("./peerhandler");
+var config_1 = require("./config");
+var args = process.argv.slice(2);
+var PEERS_DB = args[0];
+var SERVER_HOSTNAME = args[1];
+var SERVER_PORT = args[2];
+var handleConnection = function (socket, peersDB) {
+    var connIO = new socketio_1.ConnectedSocketIO(socket);
+    var peerHandler = new peerhandler_1.PeerHandler(connIO, peersDB, SERVER_HOSTNAME + ":" + SERVER_PORT);
     connIO.onConnect();
     socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
+    socket.on("close", function () {
+        console.log("Lost connection");
+    });
 };
-var runNode = function () {
-    var peersDB = new level_ts_1["default"](PEERS_DB);
-    // Run Server
-    console.log("Server starting");
-    var server = net.createServer();
-    server.listen(PORT);
-    server.on("connection", function (socket) { return handleConnectedSocket(socket, peersDB); });
-    var _loop_1 = function (peer) {
-        console.log("Connecting to", peer);
-        var lastColon = peer.lastIndexOf(":");
-        var host = peer.slice(0, lastColon);
-        var port = Number(peer.slice(lastColon + 1));
-        var client = new net.Socket();
-        client.connect(port, host);
-        client.on("connect", function () { return handleConnectedSocket(client, peersDB); });
-        client.on("error", function (err) {
-            console.log("".concat(err));
-        });
-    };
-    // Run client
-    // TODO: read from database and connect to peers
-    for (var _i = 0, BOOTSTRAP_PEERS_1 = BOOTSTRAP_PEERS; _i < BOOTSTRAP_PEERS_1.length; _i++) {
-        var peer = BOOTSTRAP_PEERS_1[_i];
-        _loop_1(peer);
-    }
-};
+var runNode = function () { return __awaiter(void 0, void 0, void 0, function () {
+    var peersDB, _i, BOOTSTRAP_PEERS_1, peer, server, _loop_1, _a, _b, peer;
+    return __generator(this, function (_c) {
+        switch (_c.label) {
+            case 0:
+                peersDB = new level_ts_1["default"](PEERS_DB);
+                _i = 0, BOOTSTRAP_PEERS_1 = config_1.BOOTSTRAP_PEERS;
+                _c.label = 1;
+            case 1:
+                if (!(_i < BOOTSTRAP_PEERS_1.length)) return [3 /*break*/, 4];
+                peer = BOOTSTRAP_PEERS_1[_i];
+                return [4 /*yield*/, peersDB.put(peer, peer)];
+            case 2:
+                _c.sent();
+                _c.label = 3;
+            case 3:
+                _i++;
+                return [3 /*break*/, 1];
+            case 4:
+                // Run Server
+                console.log("Server starting");
+                server = net.createServer();
+                server.listen(SERVER_PORT);
+                server.on("connection", function (socket) { return handleConnection(socket, peersDB); });
+                _loop_1 = function (peer) {
+                    var host = void 0;
+                    var port = void 0;
+                    try {
+                        var lastColon = peer.lastIndexOf(":");
+                        host = peer.slice(0, lastColon).trim();
+                        port = Number.parseInt(peer.slice(lastColon + 1));
+                        if (isNaN(port) || port < 0 || port >= 65536) {
+                            throw Error("invalid port ".concat(peer.slice(lastColon + 1)));
+                        }
+                    }
+                    catch (err) {
+                        console.log("".concat(err));
+                        return "continue";
+                    }
+                    console.log("Connecting to", peer);
+                    var client = new net.Socket();
+                    client.connect(port, host);
+                    client.on("connect", function () { return handleConnection(client, peersDB); });
+                    client.on("error", function (err) {
+                        console.log("".concat(err));
+                    });
+                };
+                _a = 0;
+                return [4 /*yield*/, peersDB.all()];
+            case 5:
+                _b = _c.sent();
+                _c.label = 6;
+            case 6:
+                if (!(_a < _b.length)) return [3 /*break*/, 8];
+                peer = _b[_a];
+                _loop_1(peer);
+                _c.label = 7;
+            case 7:
+                _a++;
+                return [3 /*break*/, 6];
+            case 8: return [2 /*return*/];
+        }
+    });
+}); };
 runNode();
