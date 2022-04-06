@@ -51,11 +51,13 @@ var semver = require("semver");
 var PORT = 18018;
 var MYSELF = "45.77.189.193:" + PORT.toString();
 var BOOTSTRAP_PEERS = [
-    "149.28.220.241:18018",
-    "149.28.204.235:18018",
-    "139.162.130.195:18018",
+    MYSELF
+    //   "149.28.220.241:18018",
+    //   "149.28.204.235:18018",
+    //   "139.162.130.195:18018",
 ];
 var PEERS_DB = "../peers.list";
+var CURRENT_VERSION = "0.8.0";
 var ACCEPTABLE_VERSIONS = "0.8.x";
 var ConnectedSocketIO = /** @class */ (function () {
     function ConnectedSocketIO(socket) {
@@ -64,10 +66,10 @@ var ConnectedSocketIO = /** @class */ (function () {
     }
     ConnectedSocketIO.prototype.onConnect = function () {
         this.socket.setEncoding("utf8");
-        this.writeToSocket({ type: "hello" });
-        this.writeToSocket({ type: "getpeers" });
+        this.writeToSocket({ type: "hello", version: CURRENT_VERSION, agent: "Marabu-Core Client 0.8" });
     };
     ConnectedSocketIO.prototype.onData = function (data, peerHandler) {
+        console.log("Received raw:", data);
         var tokens = data.split(/(?=[\n])|(?<=[\n])/g);
         for (var _i = 0, tokens_1 = tokens; _i < tokens_1.length; _i++) {
             var token = tokens_1[_i];
@@ -80,7 +82,7 @@ var ConnectedSocketIO = /** @class */ (function () {
     };
     ConnectedSocketIO.prototype.writeToSocket = function (msg) {
         console.log("Writing:", msg);
-        this.socket.write((0, json_canonicalize_1.canonicalize)(msg)); // TODO: add "\n"?
+        this.socket.write((0, json_canonicalize_1.canonicalize)(msg) + "\n");
     };
     ConnectedSocketIO.prototype.disconnectWithError = function (err) {
         console.log("Disconnecting from:", this.socket.address);
@@ -125,13 +127,27 @@ var PeerHandler = /** @class */ (function () {
         return message;
     };
     PeerHandler.prototype.handleMessage = function (msg) {
-        messages_1.MessageRecord.match(this.onHelloMessage, this.echo, this.onGetPeersMessage, this.onPeersMessage, this.echo, this.echo, this.echo, this.echo, this.echo, this.echo, this.echo)(msg);
+        if (msg.type == "hello") {
+            this.onHelloMessage(msg);
+        }
+        else if (msg.type == "getpeers") {
+            this.onGetPeersMessage(msg);
+        }
+        else if (msg.type == "peers") {
+            this.onPeersMessage(msg);
+        }
+        else {
+            this.echo(msg);
+        }
     };
     PeerHandler.prototype.onHelloMessage = function (msg) {
         if (!semver.satisfies(msg.version, ACCEPTABLE_VERSIONS)) {
             this.connIO.disconnectWithError("version not acceptable");
+            return;
         }
         this.finishedHandshake = true;
+        console.log("Completed handshake");
+        this.connIO.writeToSocket({ type: "getpeers" });
     };
     PeerHandler.prototype.onGetPeersMessage = function (msg) {
         var e_1, _a;
@@ -151,6 +167,7 @@ var PeerHandler = /** @class */ (function () {
                     case 3:
                         if (!(iterator_1_1 = _b.sent(), !iterator_1_1.done)) return [3 /*break*/, 5];
                         key = iterator_1_1.value.key;
+                        console.log("pushing...", key);
                         knownPeers.push(key);
                         _b.label = 4;
                     case 4: return [3 /*break*/, 2];
@@ -211,25 +228,30 @@ var PeerHandler = /** @class */ (function () {
     };
     return PeerHandler;
 }());
-var handleSocket = function (socket, peersDB) {
+var handleConnectedSocket = function (socket, peersDB) {
     var connIO = new ConnectedSocketIO(socket);
     var peerHandler = new PeerHandler(connIO, peersDB);
-    socket.on("ready", connIO.onConnect);
+    connIO.onConnect();
     socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
 };
 var runNode = function () {
     var peersDB = new level_ts_1["default"](PEERS_DB);
     // Run Server
+    console.log("Server starting");
     var server = net.createServer();
     server.listen(PORT);
-    server.on("connection", handleSocket);
+    server.on("connection", function (socket) { return handleConnectedSocket(socket, peersDB); });
     var _loop_1 = function (peer) {
+        console.log("Connecting to", peer);
         var lastColon = peer.lastIndexOf(":");
         var host = peer.slice(0, lastColon);
         var port = Number(peer.slice(lastColon + 1));
         var client = new net.Socket();
         client.connect(port, host);
-        client.on("connect", function () { return handleSocket(client, peersDB); });
+        client.on("connect", function () { return handleConnectedSocket(client, peersDB); });
+        client.on("error", function (err) {
+            console.log("".concat(err));
+        });
     };
     // Run client
     // TODO: read from database and connect to peers

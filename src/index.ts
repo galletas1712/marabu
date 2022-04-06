@@ -16,12 +16,13 @@ import * as semver from 'semver';
 const PORT = 18018;
 const MYSELF = "45.77.189.193:" + PORT.toString();
 const BOOTSTRAP_PEERS = [
-  "149.28.220.241:18018",
-  "149.28.204.235:18018",
-  "139.162.130.195:18018",
+    MYSELF
+//   "149.28.220.241:18018",
+//   "149.28.204.235:18018",
+//   "139.162.130.195:18018",
 ];
 const PEERS_DB = "../peers.list";
-
+const CURRENT_VERSION = "0.8.0";
 const ACCEPTABLE_VERSIONS = "0.8.x";
 
 class ConnectedSocketIO {
@@ -35,11 +36,11 @@ class ConnectedSocketIO {
 
     onConnect() {
         this.socket.setEncoding("utf8");
-        this.writeToSocket({type: "hello"} as HelloMsg);
-        this.writeToSocket({type: "getpeers"} as GetPeersMsg);
+        this.writeToSocket({type: "hello", version: CURRENT_VERSION, agent: "Marabu-Core Client 0.8"} as HelloMsg);
     }
 
     onData(data: string, peerHandler: PeerHandler) {
+        console.log("Received raw:", data);
         const tokens: Array<String> = data.split(/(?=[\n])|(?<=[\n])/g);
         for (const token of tokens) {
             this.buffer += token;
@@ -53,11 +54,11 @@ class ConnectedSocketIO {
 
     writeToSocket(msg: Message) {
         console.log("Writing:", msg);
-        this.socket.write(canonicalize(msg)); // TODO: add "\n"?
+        this.socket.write(canonicalize(msg) + "\n");
     }
 
     disconnectWithError(err: string) {
-        console.log("Disconnecting from:", this.socket.address);
+        console.log("Disconnecting from:", this.socket.address); // TODO: why is this an anonymous function?
         this.writeToSocket({ type: "error", error: err } as ErrorMsg);
         this.socket.destroy();
     }
@@ -107,32 +108,32 @@ class PeerHandler {
     }
 
     handleMessage(msg: Message) {
-        MessageRecord.match(
-            this.onHelloMessage,
-            this.echo,
-            this.onGetPeersMessage,
-            this.onPeersMessage,
-            this.echo,
-            this.echo,
-            this.echo,
-            this.echo,
-            this.echo,
-            this.echo,
-            this.echo,
-        )(msg);
+      if (msg.type == "hello") {
+        this.onHelloMessage(msg);
+      } else if (msg.type == "getpeers") {
+        this.onGetPeersMessage(msg);
+      } else if (msg.type == "peers") {
+        this.onPeersMessage(msg);
+      } else {
+        this.echo(msg);
+      }
     }
 
     onHelloMessage(msg: HelloMsg) {
       if(!semver.satisfies(msg.version, ACCEPTABLE_VERSIONS)){
         this.connIO.disconnectWithError("version not acceptable");
+        return;
       }
       this.finishedHandshake = true;
+      console.log("Completed handshake");
+      this.connIO.writeToSocket({type: "getpeers"} as GetPeersMsg);
     }
 
     async onGetPeersMessage(msg: GetPeersMsg) {
         let knownPeers: string[] = [MYSELF];
         const iterator = this.peersDB.iterate({ });
         for await (const {key,} of iterator) {
+            console.log("pushing...", key);
             knownPeers.push(key);
         }
         await iterator.end();
@@ -152,10 +153,10 @@ class PeerHandler {
     }
 }
 
-const handleSocket = (socket: net.Socket, peersDB: level) => {
+const handleConnectedSocket = (socket: net.Socket, peersDB: level) => {
     const connIO = new ConnectedSocketIO(socket);
     const peerHandler = new PeerHandler(connIO, peersDB);
-    socket.on("ready", connIO.onConnect);
+    connIO.onConnect();
     socket.on("data", (data: string) => connIO.onData(data, peerHandler));
 }
 
@@ -163,20 +164,26 @@ const runNode = () => {
     const peersDB = new level(PEERS_DB);
 
     // Run Server
+    console.log("Server starting");
     const server = net.createServer();
     server.listen(PORT);
-    server.on("connection", handleSocket);
+    server.on("connection", (socket: net.Socket) => handleConnectedSocket(socket, peersDB));
 
     // Run client
     // TODO: read from database and connect to peers
     for (const peer of BOOTSTRAP_PEERS) {
+        console.log("Connecting to", peer);
+
         const lastColon = peer.lastIndexOf(":");
         const host = peer.slice(0, lastColon);
         const port = Number(peer.slice(lastColon + 1));
 
         const client = new net.Socket();
         client.connect(port, host);
-        client.on("connect", () => handleSocket(client, peersDB));
+        client.on("connect", () => handleConnectedSocket(client, peersDB));
+        client.on("error", (err) => {
+            console.log(`${err}`);
+        })
     }
 }
 
