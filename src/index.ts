@@ -1,190 +1,183 @@
 import * as net from "net";
 import * as fs from "fs";
-import { Message, HelloMessage, PeersMessage } from "./interfaces";
 import {
-  helloMessage,
-  errorMessage,
-  peersMessage,
-  getPeersMessage,
-  requiredMessageKeys,
-  optionalMessageKeys,
+  HelloMsg,
+  ErrorMsg,
+  GetPeersMsg,
+  Message,
+  MessageRecord,
+  PeersMsg,
 } from "./messages";
-import { InvalidMessageError, InvalidHelloMessageError } from "./errors";
+import { canonicalize } from "json-canonicalize";
 
-const PORT = 18080;
-const MAX_PEERS = 4;
-const PEERS_FILE = "../peers.list";
+import level from 'level-ts';
+import * as semver from 'semver';
 
-//Initialized to set of bootstrapping peers; will be overwritten with peers.list if it already exists
-let knownPeers: Set<string> = new Set<string>([
+const PORT = 18018;
+const MYSELF = "45.77.189.193:" + PORT.toString();
+const BOOTSTRAP_PEERS = [
   "149.28.220.241:18018",
   "149.28.204.235:18018",
   "139.162.130.195:18018",
-]);
-let connectedPeers: Set<string> = new Set<string>();
+];
+const PEERS_DB = "../peers.list";
 
-const getRandomPeer = () => {
-  const knownPeersArray = Array.from(knownPeers);
+const ACCEPTABLE_VERSIONS = "0.8.x";
 
-  let randomIdx = Math.floor(Math.random() * knownPeers.size);
-  while (knownPeersArray[randomIdx] in connectedPeers) {
-    randomIdx = Math.floor(Math.random() * knownPeers.size);
-  }
-  return knownPeersArray[randomIdx];
-};
+class ConnectedSocketIO {
+    socket: net.Socket;
+    buffer: string;
 
-export const handleSocket = (socket: net.Socket) => {
-  // What if client disconnects before we can do this? should be ok?
-  const currPeer = socket.remoteAddress + ":" + socket.remotePort?.toString();
+    constructor(socket: net.Socket) {
+        this.socket = socket;
+        this.buffer = "";
+    }
 
-  socket.setEncoding("utf8");
-  socket.write(helloMessage);
-  socket.write(getPeersMessage);
+    onConnect() {
+        this.socket.setEncoding("utf8");
+        this.writeToSocket({type: "hello"} as HelloMsg);
+        this.writeToSocket({type: "getpeers"} as GetPeersMsg);
+    }
 
-  let rcvMsgs: Array<Message> = [];
-  let buffer: string = "";
-  socket.on("data", (data: string) => {
-    //The regex seperates by newline, e.g. "helloworld\nilovejavascript" returns ["helloworld", "\n", "ilovejavascript"]
-    let dataArray: Array<String> = data.split(/(?=[\n])|(?<=[\n])/g);
+    onData(data: string, peerHandler: PeerHandler) {
+        const tokens: Array<String> = data.split(/(?=[\n])|(?<=[\n])/g);
+        for (const token of tokens) {
+            this.buffer += token;
 
-    for (let datum of dataArray) {
-      buffer += datum;
-
-      if (datum === "\n") {
-        try {
-          const currMsg = parseAndValidateBuffer(buffer);
-          handleMessage(currMsg, rcvMsgs, (payload: string) => socket.write(payload));
-          rcvMsgs.push(currMsg);
-          connectedPeers.add(currPeer);
-        } catch (err) {
-          if (err instanceof Error) {
-            socket.write(errorMessage(err.message));
-          }
-          if (err instanceof InvalidHelloMessageError) {
-            socket.end();
-          }
-        } finally {
-          buffer = "";
+            if (token === "\n") {
+                peerHandler.onMessage(this.buffer);
+                this.buffer = "";
+            }
         }
-      }
     }
-  });
 
-  socket.on("end", () => {
-    if (currPeer in connectedPeers) {
-      connectedPeers.delete(currPeer);
+    writeToSocket(msg: Message) {
+        console.log("Writing:", msg);
+        this.socket.write(canonicalize(msg)); // TODO: add "\n"?
     }
-    connectPeerIfNotMax(getRandomPeer());
-  });
 
-  socket.on("error", () => {});
-};
-
-// Parses buffer and validates according to the specification of the type of message
-export const parseAndValidateBuffer = (buffer: string): Message => {
-  const deserialized: Object = JSON.parse(buffer);
-  if (!deserialized.hasOwnProperty("type")) {
-    throw new InvalidMessageError();
-  }
-  const result = deserialized as Message;
-  if (!Object.keys(requiredMessageKeys).includes(result.type)) {
-    throw new InvalidMessageError();
-  }
-  let foundError: boolean = false;
-  for (const key of Object.keys(result)) {
-    if (
-      !requiredMessageKeys[result.type].includes(key) &&
-      (!Object.keys(optionalMessageKeys).includes(result.type) ||
-        !optionalMessageKeys[result.type].includes(key))
-    ) {
-      foundError = true;
-      break;
-    }
-  }
-  for (const key of requiredMessageKeys[result.type]) {
-    if (!Object.keys(result).includes(key)) {
-      foundError = true;
-      break;
-    }
-  }
-  if (foundError) {
-    if (result.type === "hello") {
-      throw new InvalidHelloMessageError();
-    } else {
-      throw new InvalidMessageError();
-    }
-  }
-  return result;
-};
-
-export const handleMessage = (
-  currMsg: Message,
-  prevMsgs: Array<Message>,
-  writer: (_: string) => void,
-) => {
-  // Validate that first message is a valid hello
-  if (prevMsgs.length === 0) {
-    // If first message isn't hello
-    if (currMsg["type"] !== "hello") {
-      throw new InvalidHelloMessageError("First message is not hello");
-    }
-    let versionTest = new RegExp("0\.8\..");
-    // If version doesn't exist or version is invalid value, close socket
-    if (
-      currMsg["type"] === "hello" &&
-      versionTest.test((currMsg as HelloMessage)["version"]) === false
-    ) {
-      throw new InvalidHelloMessageError();
-    }
-  }
-
-  if (currMsg["type"] === "getpeers") {
-      writer(peersMessage(Array.from(knownPeers.values())));
-  } else if (currMsg["type"] === "peers") {
-    const newPeers: Array<string> = (currMsg as PeersMessage)["peers"];
-    for (const newPeer of newPeers) {
-      const previousSize = knownPeers.size;
-      knownPeers.add(newPeer);
-      if (knownPeers.size > previousSize) {
-        fs.appendFileSync(PEERS_FILE, newPeer + "\n");
-      }
-      connectPeerIfNotMax(newPeer);
-    }
-  }
-};
-
-// Main code starts here
-if (!fs.existsSync(PEERS_FILE)) {
-  fs.writeFileSync(PEERS_FILE, Array.from((knownPeers.values())).join("\n"));
-} else {
-  knownPeers = new Set<string>(fs.readFileSync(PEERS_FILE, "utf8").split("\n"));
-}
-
-const server = net.createServer();
-server.listen(PORT);
-server.on("connection", handleSocket);
-
-const knownPeersArray = Array.from(knownPeers.values());
-
-export const connectPeerIfNotMax = (newPeer: string) => {
-  if (connectedPeers.size < MAX_PEERS) {
-    const lastColon = newPeer.lastIndexOf(":");
-    const host = newPeer.slice(0, lastColon);
-    const port = Number(newPeer.slice(lastColon + 1));
-
-    const client = new net.Socket();
-    try {
-        client.connect(port, host, () => handleSocket(client));
-    } catch {
-        console.log("Connection refused from", newPeer);
-    }
-  }
-};
-
-while (true) {
-    for (const peer of knownPeers) {
-        connectPeerIfNotMax(peer);
+    disconnectWithError(err: string) {
+        console.log("Disconnecting from:", this.socket.address);
+        this.writeToSocket({ type: "error", error: err } as ErrorMsg);
+        this.socket.destroy();
     }
 }
 
-// TODO: fix connected peers - loop might connect more than needed before connected peers list is updated
+class PeerHandler {
+    connIO: ConnectedSocketIO;
+    finishedHandshake: boolean;
+    peersDB: level;
+
+    constructor(connIO: ConnectedSocketIO, peersDB: level) {
+        this.connIO = connIO;
+        this.finishedHandshake = false;
+        this.peersDB = peersDB;
+    }
+
+    onMessage(msgStr: string) {
+        const message: Message | undefined = this.validateMessage(msgStr);
+        if (MessageRecord.guard(message)) {
+            this.handleMessage(message);
+        }
+    }
+
+    validateMessage(msgStr: string) {
+        let deserialized: unknown;
+        try {
+            deserialized = JSON.parse(msgStr);   
+        } catch (e) {
+            this.connIO.disconnectWithError(`Unable to parse message JSON: ${e}`);
+            return undefined;
+        }
+
+        let message: Message;
+        try {
+            message = MessageRecord.check(deserialized);
+        } catch (e) {
+            this.connIO.disconnectWithError(`Invalid message format: ${e}`)
+            return undefined;
+        }
+        
+        if (!this.finishedHandshake && message.type !== "hello") {
+            this.connIO.disconnectWithError("Other message sent before hello message");
+            return undefined;
+        }
+
+        return message;
+    }
+
+    handleMessage(msg: Message) {
+        MessageRecord.match(
+            this.onHelloMessage,
+            this.echo,
+            this.onGetPeersMessage,
+            this.onPeersMessage,
+            this.echo,
+            this.echo,
+            this.echo,
+            this.echo,
+            this.echo,
+            this.echo,
+            this.echo,
+        )(msg);
+    }
+
+    onHelloMessage(msg: HelloMsg) {
+      if(!semver.satisfies(msg.version, ACCEPTABLE_VERSIONS)){
+        this.connIO.disconnectWithError("version not acceptable");
+      }
+      this.finishedHandshake = true;
+    }
+
+    async onGetPeersMessage(msg: GetPeersMsg) {
+        let knownPeers: string[] = [MYSELF];
+        const iterator = this.peersDB.iterate({ });
+        for await (const {key,} of iterator) {
+            knownPeers.push(key);
+        }
+        await iterator.end();
+        this.connIO.writeToSocket({ type: "peers", peers: knownPeers });
+    }
+
+    async onPeersMessage (msg: PeersMsg) {
+        await Promise.all(msg.peers.map(async (peer: string) => {
+            if (!(await this.peersDB.exists(peer))) {
+                await this.peersDB.put(peer, false);  // Peer is not connected because it's not known
+            }
+        }));
+    }
+    
+    echo(msg: Message) {
+        console.log(`Received ${msg.type} message but not doing anything.`);
+    }
+}
+
+const handleSocket = (socket: net.Socket, peersDB: level) => {
+    const connIO = new ConnectedSocketIO(socket);
+    const peerHandler = new PeerHandler(connIO, peersDB);
+    socket.on("ready", connIO.onConnect);
+    socket.on("data", (data: string) => connIO.onData(data, peerHandler));
+}
+
+const runNode = () => {
+    const peersDB = new level(PEERS_DB);
+
+    // Run Server
+    const server = net.createServer();
+    server.listen(PORT);
+    server.on("connection", handleSocket);
+
+    // Run client
+    // TODO: read from database and connect to peers
+    for (const peer of BOOTSTRAP_PEERS) {
+        const lastColon = peer.lastIndexOf(":");
+        const host = peer.slice(0, lastColon);
+        const port = Number(peer.slice(lastColon + 1));
+
+        const client = new net.Socket();
+        client.connect(port, host);
+        client.on("connect", () => handleSocket(client, peersDB));
+    }
+}
+
+runNode();

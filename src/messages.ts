@@ -1,25 +1,69 @@
-export const requiredMessageKeys: { [key: string]: Array<string> } = {
-    "hello": ["type", "version"],
-    "error": ["type", "error"],
-    "getpeers": ["type"],
-    "peers": ["type", "peers"],
-    "getobject": ["type", "objectid"],
-    "ihaveobject": ["type", "objectid"],
-    "object": ["type", "object"],
-    "getmempool": ["type"],
-    "mempool": ["type", "txids"],
-};
+import { Literal, Optional, Record, String, Array, Union, Static } from 'runtypes';
 
-export const optionalMessageKeys: { [key: string]: Array<string> } = {
-    "hello": ["agent"]
-};
-
-export const helloMessage = JSON.stringify({
-    "type": "hello",
-    "version": "0.8.0",
-    "agent": "Marabu-Core Client 0.8"
+export const HelloMsgRecord = Record({
+    type: Literal("hello"),
+    version: String,
+    agent: Optional(String)
 });
 
-export const getPeersMessage = JSON.stringify({"type": "getpeers"});
-export const peersMessage = (knownPeers: Array<string>) => JSON.stringify({ "type": "peers", "peers": knownPeers });
-export const errorMessage = (errorMsg: string) => JSON.stringify({ "type": "error", "error": errorMsg });
+export const ErrorMsgRecord = Record({
+    type: Literal("error"),
+    error: String,
+});
+
+export const GetPeersMsgRecord = Record({
+    type: Literal("getpeers"),
+});
+
+export const PeersMsgRecord = Record({
+    type: Literal("peers"),
+    peers: Array(String)
+});
+
+export const GetObjectMsgRecord = Record({
+    type: Literal("getobject"),
+    objectid: String,
+});
+
+export const IHaveObjectMsgRecord = Record({
+    type: Literal("ihaveobject"),
+    objectid: String,
+});
+
+export const ObjectMsgRecord = Record({
+    type: Literal("object"),
+    object: Record({})
+});
+
+export const GetMempoolMsgRecord = Record({
+    type: Literal("getmempool")
+});
+
+export const MempoolMsgRecord = Record({
+    type: Literal("mempool"),
+    txids: Array(String)
+});
+
+export const GetChainTipMsgRecord = Record({
+    type: Literal("getchaintip")
+});
+
+export const ChainTipMsgRecord = Record({
+    type: Literal("chaintip"),
+    blockid: String
+});
+
+export const MessageRecord = Union(HelloMsgRecord, ErrorMsgRecord, GetPeersMsgRecord, PeersMsgRecord, GetObjectMsgRecord, IHaveObjectMsgRecord, ObjectMsgRecord, GetMempoolMsgRecord, MempoolMsgRecord, GetChainTipMsgRecord, ChainTipMsgRecord);
+
+export type HelloMsg = Static<typeof HelloMsgRecord>;
+export type ErrorMsg = Static<typeof ErrorMsgRecord>;
+export type GetPeersMsg = Static<typeof GetPeersMsgRecord>;
+export type PeersMsg = Static<typeof PeersMsgRecord>;
+export type GetObjectMsg = Static<typeof GetObjectMsgRecord>;
+export type IHaveObjectMsg = Static<typeof IHaveObjectMsgRecord>;
+export type ObjectMsg = Static<typeof ObjectMsgRecord>;
+export type GetMempoolMessage = Static<typeof GetMempoolMsgRecord>;
+export type MempoolMessage = Static<typeof MempoolMsgRecord>;
+export type GetChainTipMessage = Static<typeof GetChainTipMsgRecord>;
+export type ChainTipMessage = Static<typeof ChainTipMsgRecord>;
+export type Message = Static<typeof MessageRecord>;
