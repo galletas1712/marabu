@@ -14,9 +14,6 @@ const handleConnection = (socket: net.Socket, peersDB: level) => {
     const peerHandler = new PeerHandler(connIO, peersDB, serverHostname + ":" + serverPort);
     connIO.onConnect();
     socket.on("data", (data: string) => connIO.onData(data, peerHandler));
-    socket.on("close", () => {
-        console.log(`Lost connection`);
-    });
 }
 
 const runNode = async () => {
@@ -56,6 +53,11 @@ const runNode = async () => {
         client.on("error", (err) => {
             console.log(`${err}`);
         })
+        client.on("close", (hadError: boolean) => {
+            setTimeout(() => {
+                client.connect(port, host);
+            }, 1000);
+        });
     }
 }
 

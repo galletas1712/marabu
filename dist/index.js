@@ -42,24 +42,21 @@ var socketio_1 = require("./socketio");
 var peerhandler_1 = require("./peerhandler");
 var config_1 = require("./config");
 var args = process.argv.slice(2);
-var PEERS_DB = args[0];
-var SERVER_HOSTNAME = args[1];
-var SERVER_PORT = args[2];
+var peersDBPath = args[0];
+var serverHostname = args[1];
+var serverPort = args[2];
 var handleConnection = function (socket, peersDB) {
     var connIO = new socketio_1.ConnectedSocketIO(socket);
-    var peerHandler = new peerhandler_1.PeerHandler(connIO, peersDB, SERVER_HOSTNAME + ":" + SERVER_PORT);
+    var peerHandler = new peerhandler_1.PeerHandler(connIO, peersDB, serverHostname + ":" + serverPort);
     connIO.onConnect();
     socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
-    socket.on("close", function () {
-        console.log("Lost connection");
-    });
 };
 var runNode = function () { return __awaiter(void 0, void 0, void 0, function () {
     var peersDB, _i, BOOTSTRAP_PEERS_1, peer, server, _loop_1, _a, _b, peer;
     return __generator(this, function (_c) {
         switch (_c.label) {
             case 0:
-                peersDB = new level_ts_1["default"](PEERS_DB);
+                peersDB = new level_ts_1["default"](peersDBPath);
                 _i = 0, BOOTSTRAP_PEERS_1 = config_1.BOOTSTRAP_PEERS;
                 _c.label = 1;
             case 1:
@@ -76,11 +73,11 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                 // Run Server
                 console.log("Server starting");
                 server = net.createServer();
-                server.listen(SERVER_PORT);
+                server.listen(serverPort);
                 server.on("connection", function (socket) { return handleConnection(socket, peersDB); });
                 _loop_1 = function (peer) {
-                    var host = void 0;
-                    var port = void 0;
+                    var host;
+                    var port;
                     try {
                         var lastColon = peer.lastIndexOf(":");
                         host = peer.slice(0, lastColon).trim();
@@ -99,6 +96,11 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                     client.on("connect", function () { return handleConnection(client, peersDB); });
                     client.on("error", function (err) {
                         console.log("".concat(err));
+                    });
+                    client.on("close", function (hadError) {
+                        setTimeout(function () {
+                            client.connect(port, host);
+                        }, 1000);
                     });
                 };
                 _a = 0;
