@@ -26,7 +26,10 @@ const runNode = async () => {
     console.log("Server starting");
     const server = net.createServer();
     server.listen(serverPort);
-    server.on("connection", (socket: net.Socket) => handleConnection(socket, peersDB));
+    server.on("connection", (socket: net.Socket) => {
+        socket.on("error", (err) => console.log(`${err}`));
+        handleConnection(socket, peersDB)
+    });
 
     // Run client
     for (const peer of await peersDB.all()) {
@@ -50,10 +53,8 @@ const runNode = async () => {
         const client = new net.Socket();
         client.connect(port, host);
         client.on("connect", () => handleConnection(client, peersDB));
-        client.on("error", (err) => {
-            console.log(`${err}`);
-        })
-        client.on("close", (hadError: boolean) => {
+        client.on("error", (err) => console.log(`${err}`));
+        client.on("close", () => {
             setTimeout(() => {
                 client.connect(port, host);
             }, 1000);

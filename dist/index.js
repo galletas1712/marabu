@@ -74,7 +74,10 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                 console.log("Server starting");
                 server = net.createServer();
                 server.listen(serverPort);
-                server.on("connection", function (socket) { return handleConnection(socket, peersDB); });
+                server.on("connection", function (socket) {
+                    socket.on("error", function (err) { return console.log("".concat(err)); });
+                    handleConnection(socket, peersDB);
+                });
                 _loop_1 = function (peer) {
                     var host;
                     var port;
@@ -94,10 +97,8 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                     var client = new net.Socket();
                     client.connect(port, host);
                     client.on("connect", function () { return handleConnection(client, peersDB); });
-                    client.on("error", function (err) {
-                        console.log("".concat(err));
-                    });
-                    client.on("close", function (hadError) {
+                    client.on("error", function (err) { return console.log("".concat(err)); });
+                    client.on("close", function () {
                         setTimeout(function () {
                             client.connect(port, host);
                         }, 1000);
