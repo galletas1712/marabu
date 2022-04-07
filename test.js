@@ -37,6 +37,9 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 var net = require("net");
+var args = process.argv.slice(2);
+var serverHostname = args[0];
+var serverPort = Number.parseInt(args[1]);
 var helloMsg = JSON.stringify({ "type": "hello", "version": "0.8.0", "agent": "Marabu-Core Client 0.8" }) + "\n";
 var getPeersMsg = JSON.stringify({ "type": "getpeers" }) + "\n";
 var peersMsg = JSON.stringify({ "type": "peers", "peers": ["custompeer.ksks1:18018", "custompeer.ksks2:18018"] }) + "\n";
@@ -55,7 +58,7 @@ function createNewClient(messages) {
             client.write(message);
         }
     });
-    client.connect(18018, '45.77.1.34');
+    client.connect(serverPort, serverHostname);
     return client;
 }
 function test2() {
@@ -99,7 +102,7 @@ function test4() {
                     return [4 /*yield*/, timeout(300)];
                 case 2:
                     _a.sent();
-                    client.connect(18018, '45.77.1.34');
+                    client.connect(serverPort, serverHostname);
                     return [2 /*return*/];
             }
         });
@@ -133,7 +136,7 @@ function test6() {
                 timeout(10);
                 client.write("tpeers\"}\n");
             });
-            client.connect(18018, '45.77.1.34');
+            client.connect(serverPort, serverHostname);
             return [2 /*return*/];
         });
     });
@@ -162,7 +165,7 @@ function test8() {
         return __generator(this, function (_a) {
             console.log("test #8: sending 5 invalid messages");
             console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
-            client = createNewClient(["Wbgygvf7rgtyv7tfbgy{{{\n", "{\"type\":\"diufygeuybhv\"}\n", "{\"type\":\"hello\"}\n", "{\"type\":\"hello\",\"version\":\"jd3.x\"}\n", "{\"type\":\"hello\",\"version\":\"5.8.2\"}\n"]);
+            client = createNewClient(["Wbgygvf7rgtyv7tfbgy{{{"]);
             return [2 /*return*/];
         });
     });
@@ -191,7 +194,7 @@ function test9() {
                         client2.write(helloMsg);
                         client2.write(getPeersMsg);
                     });
-                    client2.connect(18018, '45.77.1.34');
+                    client2.connect(serverPort, serverHostname);
                     return [2 /*return*/];
             }
         });
@@ -209,7 +212,81 @@ function test10() {
         });
     });
 }
-var testsArray = [test2, test3, test4, test5, test6, test7, test8, test9, test10];
+function test11() {
+    return __awaiter(this, void 0, void 0, function () {
+        var client;
+        return __generator(this, function (_a) {
+            console.log("test #11: sending 5 invalid messages");
+            console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+            client = createNewClient(["{\"type\":\"diufygeuybhv\"}"]);
+            return [2 /*return*/];
+        });
+    });
+}
+function test12() {
+    return __awaiter(this, void 0, void 0, function () {
+        var client;
+        return __generator(this, function (_a) {
+            console.log("test #12: sending 5 invalid messages");
+            console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+            client = createNewClient(["{\"type\":\"hello\"}"]);
+            return [2 /*return*/];
+        });
+    });
+}
+function test13() {
+    return __awaiter(this, void 0, void 0, function () {
+        var client;
+        return __generator(this, function (_a) {
+            console.log("test #13: sending 5 invalid messages");
+            console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+            client = createNewClient(["{\"type\":\"hello\",\"version\":\"jd3.x\"}"]);
+            return [2 /*return*/];
+        });
+    });
+}
+function test14() {
+    return __awaiter(this, void 0, void 0, function () {
+        var client;
+        return __generator(this, function (_a) {
+            console.log("test #14: sending 5 invalid messages");
+            console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+            client = createNewClient(["{\"type\":\"hello\",\"version\":\"5.8.2\"}"]);
+            return [2 /*return*/];
+        });
+    });
+}
+function test15() {
+    return __awaiter(this, void 0, void 0, function () {
+        var client;
+        var _this = this;
+        return __generator(this, function (_a) {
+            console.log("test #15: timeout on valid message, send another valid message");
+            console.log("not expecting timeout or disconnect");
+            client = new net.Socket();
+            client.on('data', function (msg) {
+                console.log("Received message:", msg.toString());
+            });
+            client.on("connect", function () { return __awaiter(_this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            client.write(helloMsg);
+                            return [4 /*yield*/, timeout(1500)];
+                        case 1:
+                            _a.sent();
+                            client.write(getPeersMsg);
+                            return [2 /*return*/];
+                    }
+                });
+            }); });
+            client.connect(serverPort, serverHostname);
+            return [2 /*return*/];
+        });
+    });
+}
+var testsArray = [test2, test3, test4, test5, test6, test7, test9, test10, test8, test11, test12, test13, test14, test15];
+// const testsArray = [test8, test11, test12, test13, test14]
 function tests() {
     return __awaiter(this, void 0, void 0, function () {
         var _i, testsArray_1, test;
@@ -225,7 +302,7 @@ function tests() {
                     return [4 /*yield*/, test()];
                 case 2:
                     _a.sent();
-                    return [4 /*yield*/, timeout(1000)];
+                    return [4 /*yield*/, timeout(2000)];
                 case 3:
                     _a.sent();
                     console.log('------------------------------------------------');

@@ -1,5 +1,9 @@
 import * as net from "net";
 
+const args = process.argv.slice(2);
+const serverHostname = args[0];
+const serverPort = Number.parseInt(args[1]);
+
 let helloMsg = JSON.stringify({ "type": "hello", "version": "0.8.0", "agent": "Marabu-Core Client 0.8" }) + "\n";
 let getPeersMsg = JSON.stringify({"type": "getpeers"}) + "\n";
 let peersMsg = JSON.stringify({ "type": "peers", "peers": ["custompeer.ksks1:18018", "custompeer.ksks2:18018"]}) + "\n";
@@ -20,13 +24,13 @@ function createNewClient(messages){
             client.write(message);
         }
     });
-    client.connect(18018, '45.77.1.34');
+    client.connect(serverPort, serverHostname);
     return client;
 }
 
 async function test2(){
     console.log("test #2: sending nothing");
-    console.log("expecting: hello -- or maybe we also expect getpeers?");
+    console.log("expecting: hello and getpeers");
     
     const client = createNewClient([]);
 };
@@ -48,7 +52,7 @@ async function test4(){
     await timeout(300);
     client.end();
     await timeout(300);
-    client.connect(18018, '45.77.1.34');
+    client.connect(serverPort, serverHostname);
 };
 
 async function test5(){
@@ -75,7 +79,7 @@ async function test6(){
         client.write(`tpeers"}\n`);
     })
 
-    client.connect(18018, '45.77.1.34');
+    client.connect(serverPort, serverHostname);
 }
 
 async function test7(){
@@ -114,7 +118,7 @@ async function test9(){
         client2.write(getPeersMsg);
     })
 
-    client2.connect(18018, '45.77.1.34');
+    client2.connect(serverPort, serverHostname);
 
 }
 
@@ -158,15 +162,31 @@ async function test14(){
 
     const client = createNewClient([`{"type":"hello","version":"5.8.2"}` ])
 }
-const testsArray = [test2, test3, test4, test5, test6, test7, test9, test10, test8, test11, test12, test13, test14]
 
-// const testsArray = [test8, test11, test12, test13, test14]
+async function test15() {
+    console.log("test #15: timeout on valid message, send another valid message");
+    console.log("not expecting timeout or disconnect");
+    const client = new net.Socket();
+    
+    client.on('data', (msg) => {
+        console.log(`Received message:`, msg.toString());
+    });
+
+    client.on("connect", async () => {
+        client.write(helloMsg);
+        await timeout(1500);
+        client.write(getPeersMsg);
+    });
+    client.connect(serverPort, serverHostname);
+}
+
+const testsArray = [test2, test3, test4, test5, test6, test7, test9, test10, test8, test11, test12, test13, test14, test15]
 
 async function tests(){
     console.log('------------------------------------------------')
     for(let test of testsArray){
         await test();
-        await timeout(1000);
+        await timeout(2000);
         console.log('------------------------------------------------')
     }
 }

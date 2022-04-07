@@ -48,6 +48,7 @@ var PeerHandler = /** @class */ (function () {
         this.selfHostWithPort = selfHostWithPort;
     }
     PeerHandler.prototype.onMessage = function (msgStr) {
+        console.log("Received: ".concat(msgStr));
         var message = this.validateMessage(msgStr);
         if (messages_1.MessageRecord.guard(message)) {
             this.handleMessage(message);
@@ -77,7 +78,6 @@ var PeerHandler = /** @class */ (function () {
         return message;
     };
     PeerHandler.prototype.handleMessage = function (msg) {
-        console.log("Received message: ".concat(JSON.stringify(msg)));
         if (msg.type == "hello") {
             this.onHelloMessage(msg);
         }
@@ -98,7 +98,6 @@ var PeerHandler = /** @class */ (function () {
         }
         this.finishedHandshake = true;
         console.log("Completed handshake");
-        this.connIO.writeToSocket({ type: "getpeers" });
     };
     PeerHandler.prototype.onGetPeersMessage = function (msg) {
         return __awaiter(this, void 0, void 0, function () {

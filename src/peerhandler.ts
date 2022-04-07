@@ -25,6 +25,7 @@ export class PeerHandler {
     }
 
     onMessage(msgStr: string) {
+        console.log(`Received: ${msgStr}`);
         const message: Message | undefined = this.validateMessage(msgStr);
         if (MessageRecord.guard(message)) {
             this.handleMessage(message);
@@ -57,7 +58,6 @@ export class PeerHandler {
     }
 
     handleMessage(msg: Message) {
-      console.log(`Received message: ${JSON.stringify(msg)}`);
       if (msg.type == "hello") {
         this.onHelloMessage(msg);
       } else if (msg.type == "getpeers") {
@@ -76,7 +76,6 @@ export class PeerHandler {
       }
       this.finishedHandshake = true;
       console.log("Completed handshake");
-      this.connIO.writeToSocket({type: "getpeers"} as GetPeersMsg);
     }
 
     async onGetPeersMessage(msg: GetPeersMsg) {
