@@ -41,7 +41,7 @@ const runNode = async () => {
             host = peer.slice(0, lastColon).trim();
             port = Number.parseInt(peer.slice(lastColon + 1));
             if (isNaN(port) || port < 0 || port >= 65536) {
-               throw Error(`invalid port ${peer.slice(lastColon + 1)}`); 
+                throw Error(`invalid port ${peer.slice(lastColon + 1)}`); 
             }
         } catch (err) {
             console.log(`${err}`);

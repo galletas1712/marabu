@@ -7,9 +7,6 @@ var ConnectedSocketIO = /** @class */ (function () {
     function ConnectedSocketIO(socket) {
         this.socket = socket;
         this.buffer = "";
-        socket.on("error", function (err) {
-            console.log("".concat(err));
-        });
     }
     ConnectedSocketIO.prototype.onConnect = function () {
         this.socket.setEncoding("utf8");

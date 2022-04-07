@@ -15,9 +15,6 @@ export class ConnectedSocketIO {
     constructor(socket: net.Socket) {
         this.socket = socket;
         this.buffer = "";
-        socket.on("error", (err) => {
-            console.log(`${err}`);
-        })
     }
 
     onConnect() {
