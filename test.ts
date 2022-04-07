@@ -92,7 +92,7 @@ async function test8(){
     console.log("test #8: sending 5 invalid messages");
     console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
 
-    const client = createNewClient(["Wbgygvf7rgtyv7tfbgy{{{\n", `{"type":"diufygeuybhv"}\n`, `{"type":"hello"}\n`, `{"type":"hello","version":"jd3.x"}\n`, `{"type":"hello","version":"5.8.2"}\n` ])
+    const client = createNewClient(["Wbgygvf7rgtyv7tfbgy{{{"])
 }
 
 async function test9(){
@@ -126,7 +126,41 @@ async function test10(){
     const client2 = createNewClient([helloMsg]);
 
 }
-const testsArray = [test2, test3, test4, test5, test6, test7, test8, test9, test10]
+
+
+async function test11(){
+    console.log("test #11: sending 5 invalid messages");
+    console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+
+    const client = createNewClient([`{"type":"diufygeuybhv"}`])
+}
+
+
+async function test12(){
+    console.log("test #12: sending 5 invalid messages");
+    console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+
+    const client = createNewClient([`{"type":"hello"}`])
+}
+
+
+async function test13(){
+    console.log("test #13: sending 5 invalid messages");
+    console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+
+    const client = createNewClient([`{"type":"hello","version":"jd3.x"}`])
+}
+
+
+async function test14(){
+    console.log("test #14: sending 5 invalid messages");
+    console.log("expecting: 5 error messages but not disconnected -- or maybe we disconnect on first invalid message?");
+
+    const client = createNewClient([`{"type":"hello","version":"5.8.2"}` ])
+}
+const testsArray = [test2, test3, test4, test5, test6, test7, test9, test10, test8, test11, test12, test13, test14]
+
+// const testsArray = [test8, test11, test12, test13, test14]
 
 async function tests(){
     console.log('------------------------------------------------')
@@ -135,7 +169,6 @@ async function tests(){
         await timeout(1000);
         console.log('------------------------------------------------')
     }
-
 }
 
 console.log("Starting test client...");
