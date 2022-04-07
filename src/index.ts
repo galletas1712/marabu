@@ -24,12 +24,11 @@ const runNode = async () => {
 
     // Run Server
     console.log("Server starting");
-    const server = net.createServer();
-    server.listen(serverPort);
-    server.on("connection", (socket: net.Socket) => {
+    const server = net.createServer((socket: net.Socket) => {
         socket.on("error", (err) => console.log(`${err}`));
-        handleConnection(socket, peersDB)
+        handleConnection(socket, peersDB);
     });
+    server.listen(serverPort);
 
     // Run client
     for (const peer of await peersDB.all()) {

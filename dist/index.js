@@ -45,7 +45,6 @@ var args = process.argv.slice(2);
 var peersDBPath = args[0];
 var serverHostname = args[1];
 var serverPort = args[2];
-var mode = Number.parseInt(args[3]);
 var handleConnection = function (socket, peersDB) {
     var connIO = new socketio_1.ConnectedSocketIO(socket);
     var peerHandler = new peerhandler_1.PeerHandler(connIO, peersDB, serverHostname + ":" + serverPort);
@@ -71,17 +70,13 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                 _i++;
                 return [3 /*break*/, 1];
             case 4:
-                if (mode === 0 || mode === 1) {
-                    // Run Server
-                    console.log("Server starting");
-                    server = net.createServer();
-                    server.listen(serverPort);
-                    server.on("connection", function (socket) {
-                        socket.on("error", function (err) { return console.log("".concat(err)); });
-                        handleConnection(socket, peersDB);
-                    });
-                }
-                if (!(mode === 0 || mode === 2)) return [3 /*break*/, 8];
+                // Run Server
+                console.log("Server starting");
+                server = net.createServer(function (socket) {
+                    socket.on("error", function (err) { return console.log("".concat(err)); });
+                    handleConnection(socket, peersDB);
+                });
+                server.listen(serverPort);
                 _loop_1 = function (peer) {
                     var host;
                     var port;

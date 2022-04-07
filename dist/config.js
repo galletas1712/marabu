@@ -5,8 +5,7 @@ exports.CURRENT_VERSION = "0.8.0";
 exports.AGENT = "Marabu-Core Client 0.8";
 exports.ACCEPTABLE_VERSIONS = "0.8.x";
 exports.BOOTSTRAP_PEERS = [
-    "localhost:18018",
-    // "149.28.220.241:18018",
-    // "149.28.204.235:18018",
-    // "139.162.130.195:18018",
+    "149.28.220.241:18018",
+    "149.28.204.235:18018",
+    "139.162.130.195:18018",
 ];
