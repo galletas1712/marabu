@@ -8,6 +8,7 @@ import {
   GetPeersMsg,
 } from "./messages";
 import { CURRENT_VERSION, AGENT } from "./config";
+import { logger } from "./logger";
 
 const TIMEOUT = 1000;
 
@@ -46,12 +47,12 @@ export class ConnectedSocketIO {
     }
 
     writeToSocket(msg: Message) {
-        console.log("Writing:", msg);
+        logger.debug("Writing:", msg);
         this.socket.write(canonicalize(msg) + "\n");
     }
 
     disconnectWithError(err: string) {
-        console.log("Disconnecting due to error...");
+        logger.debug("Disconnecting due to error...");
         this.writeToSocket({ type: "error", error: err } as ErrorMsg);
         this.socket.destroy();
     }

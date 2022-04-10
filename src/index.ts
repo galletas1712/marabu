@@ -3,35 +3,37 @@ import level from 'level-ts';
 import { ConnectedSocketIO } from "./socketio";
 import { PeerHandler } from "./peerhandler";
 import { BOOTSTRAP_PEERS } from "./config";
+import { PeerManager } from "./peermanager";
+import { logger } from "./logger";
 
 const args = process.argv.slice(2);
 const peersDBPath = args[0];
 const serverHostname = args[1];
 const serverPort = args[2];
 
-const handleConnection = (socket: net.Socket, peersDB: level) => {
+
+const handleConnection = async (socket: net.Socket, peerManager: PeerManager) => {
     const connIO = new ConnectedSocketIO(socket);
-    const peerHandler = new PeerHandler(connIO, peersDB, serverHostname + ":" + serverPort);
+    const peerHandler = new PeerHandler(connIO, peerManager, serverHostname + ":" + serverPort);
     connIO.onConnect();
     socket.on("data", (data: string) => connIO.onData(data, peerHandler));
 }
 
 const runNode = async () => {
-    const peersDB = new level(peersDBPath);
-    for (const peer of BOOTSTRAP_PEERS) {
-        await peersDB.put(peer, peer);
-    }
+    const db = new level(peersDBPath);
+    const peerManager = new PeerManager(db);
+    await peerManager.load();
 
     // Run Server
-    console.log("Server starting");
+    logger.debug("Server starting");
     const server = net.createServer((socket: net.Socket) => {
-        socket.on("error", (err) => console.log(`${err}`));
-        handleConnection(socket, peersDB);
+        socket.on("error", (err) => logger.warn(`${err}`));
+        handleConnection(socket, peerManager);
     });
     server.listen(serverPort);
 
     // Run client
-    for (const peer of await peersDB.all()) {
+    for (const peer of await peerManager.knownPeers) {
         let host: string;
         let port: number;
 
@@ -43,16 +45,16 @@ const runNode = async () => {
                 throw Error(`invalid port ${peer.slice(lastColon + 1)}`); 
             }
         } catch (err) {
-            console.log(`${err}`);
+            logger.warn(`${err}`);
             continue;
         }
 
-        console.log("Connecting to", peer);
+        logger.debug("Connecting to", peer);
 
         const client = new net.Socket();
         client.connect(port, host);
-        client.on("connect", () => handleConnection(client, peersDB));
-        client.on("error", (err) => console.log(`${err}`));
+        client.on("connect", () => handleConnection(client, peerManager));
+        client.on("error", (err) => logger.warn(`${err}`));
         client.on("close", () => {
             setTimeout(() => {
                 client.connect(port, host);

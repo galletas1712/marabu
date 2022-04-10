@@ -1,6 +1,7 @@
 import level from 'level-ts';
 import * as semver from 'semver';
 import { ACCEPTABLE_VERSIONS } from './config';
+import { logger } from './logger';
 import {
   HelloMsg,
   ErrorMsg,
@@ -9,23 +10,24 @@ import {
   MessageRecord,
   PeersMsg,
 } from "./messages";
+import { PeerManager } from './peermanager';
 import { ConnectedSocketIO } from "./socketio";
 
 export class PeerHandler {
     connIO: ConnectedSocketIO;
     finishedHandshake: boolean;
-    peersDB: level;
+    peerManager: PeerManager;
     selfHostWithPort: string;
 
-    constructor(connIO: ConnectedSocketIO, peersDB: level, selfHostWithPort: string) {
+    constructor(connIO: ConnectedSocketIO, peerManager: PeerManager, selfHostWithPort: string) {
         this.connIO = connIO;
         this.finishedHandshake = false;
-        this.peersDB = peersDB;
+        this.peerManager = peerManager;
         this.selfHostWithPort = selfHostWithPort;
     }
 
     onMessage(msgStr: string) {
-        console.log(`Received: ${msgStr}`);
+        logger.debug(`Received: ${msgStr}`);
         const message: Message | undefined = this.validateMessage(msgStr);
         if (MessageRecord.guard(message)) {
             this.handleMessage(message);
@@ -75,26 +77,18 @@ export class PeerHandler {
         return;
       }
       this.finishedHandshake = true;
-      console.log("Completed handshake");
+      logger.debug("Completed handshake");
     }
 
     async onGetPeersMessage(msg: GetPeersMsg) {
-        let knownPeers: string[] = await this.peersDB.all();
-        if (!knownPeers.includes(this.selfHostWithPort)) {
-            knownPeers.push(this.selfHostWithPort);
-        }
-        this.connIO.writeToSocket({ type: "peers", peers: knownPeers });
+        this.connIO.writeToSocket({ type: "peers", peers: Array.from(this.peerManager.knownPeers) });
     }
 
     async onPeersMessage (msg: PeersMsg) {
-        await Promise.all(msg.peers.map(async (peer: string) => {
-            if (peer.length > 0) {
-                await this.peersDB.put(peer, peer);
-            }
-        }));
+      msg.peers.forEach((peer: string) => this.peerManager.peerDiscovered(peer));
     }
     
     echo(msg: Message) {
-        console.log(`Received ${msg.type} message but not doing anything.`);
+        logger.debug(`Received ${msg.type} message but not doing anything.`);
     }
 }
