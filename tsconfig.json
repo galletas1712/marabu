@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
-    "outDir": "dist"
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "downlevelIteration": true
   },
   "include": ["src"],
   "exclude": [

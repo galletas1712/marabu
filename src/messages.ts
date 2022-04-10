@@ -1,59 +1,79 @@
-import { Literal, Optional, Record, String, Array, Union, Static } from 'runtypes';
+import {
+  Literal,
+  Optional,
+  Record,
+  String,
+  Array,
+  Union,
+  Static,
+} from "runtypes";
 
 export const HelloMsgRecord = Record({
-    type: Literal("hello"),
-    version: String,
-    agent: Optional(String)
+  type: Literal("hello"),
+  version: String,
+  agent: Optional(String),
 });
 
 export const ErrorMsgRecord = Record({
-    type: Literal("error"),
-    error: String,
+  type: Literal("error"),
+  error: String,
 });
 
 export const GetPeersMsgRecord = Record({
-    type: Literal("getpeers"),
+  type: Literal("getpeers"),
 });
 
 export const PeersMsgRecord = Record({
-    type: Literal("peers"),
-    peers: Array(String)
+  type: Literal("peers"),
+  peers: Array(String),
 });
 
 export const GetObjectMsgRecord = Record({
-    type: Literal("getobject"),
-    objectid: String,
+  type: Literal("getobject"),
+  objectid: String,
 });
 
 export const IHaveObjectMsgRecord = Record({
-    type: Literal("ihaveobject"),
-    objectid: String,
+  type: Literal("ihaveobject"),
+  objectid: String,
 });
 
 export const ObjectMsgRecord = Record({
-    type: Literal("object"),
-    object: Record({})
+  type: Literal("object"),
+  object: Record({}),
 });
 
 export const GetMempoolMsgRecord = Record({
-    type: Literal("getmempool")
+  type: Literal("getmempool"),
 });
 
 export const MempoolMsgRecord = Record({
-    type: Literal("mempool"),
-    txids: Array(String)
+  type: Literal("mempool"),
+  txids: Array(String),
 });
 
 export const GetChainTipMsgRecord = Record({
-    type: Literal("getchaintip")
+  type: Literal("getchaintip"),
 });
 
 export const ChainTipMsgRecord = Record({
-    type: Literal("chaintip"),
-    blockid: String
+  type: Literal("chaintip"),
+  blockid: String,
 });
 
-export const MessageRecord = Union(HelloMsgRecord, ErrorMsgRecord, GetPeersMsgRecord, PeersMsgRecord, GetObjectMsgRecord, IHaveObjectMsgRecord, ObjectMsgRecord, GetMempoolMsgRecord, MempoolMsgRecord, GetChainTipMsgRecord, ChainTipMsgRecord);
+export const MessageRecord = Union(
+  HelloMsgRecord,
+  ErrorMsgRecord,
+  GetPeersMsgRecord,
+  PeersMsgRecord,
+  GetObjectMsgRecord,
+  IHaveObjectMsgRecord,
+  ObjectMsgRecord,
+  GetMempoolMsgRecord,
+  MempoolMsgRecord,
+  GetChainTipMsgRecord,
+  ChainTipMsgRecord
+);
 
 export type HelloMsg = Static<typeof HelloMsgRecord>;
 export type ErrorMsg = Static<typeof ErrorMsgRecord>;

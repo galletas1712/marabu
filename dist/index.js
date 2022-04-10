@@ -1,4 +1,27 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -35,46 +58,57 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var __values = (this && this.__values) || function(o) {
+    var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+    if (m) return m.call(o);
+    if (o && typeof o.length === "number") return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 exports.__esModule = true;
-var net = require("net");
-var level_ts_1 = require("level-ts");
+var net = __importStar(require("net"));
+var level_ts_1 = __importDefault(require("level-ts"));
 var socketio_1 = require("./socketio");
 var peerhandler_1 = require("./peerhandler");
-var config_1 = require("./config");
+var peermanager_1 = require("./peermanager");
+var logger_1 = require("./logger");
 var args = process.argv.slice(2);
 var peersDBPath = args[0];
 var serverHostname = args[1];
 var serverPort = args[2];
-var handleConnection = function (socket, peersDB) {
-    var connIO = new socketio_1.ConnectedSocketIO(socket);
-    var peerHandler = new peerhandler_1.PeerHandler(connIO, peersDB, serverHostname + ":" + serverPort);
-    connIO.onConnect();
-    socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
-};
+var handleConnection = function (socket, peerManager) { return __awaiter(void 0, void 0, void 0, function () {
+    var connIO, peerHandler;
+    return __generator(this, function (_a) {
+        connIO = new socketio_1.ConnectedSocketIO(socket);
+        peerHandler = new peerhandler_1.PeerHandler(connIO, peerManager, serverHostname + ":" + serverPort);
+        connIO.onConnect();
+        socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
+        return [2 /*return*/];
+    });
+}); };
 var runNode = function () { return __awaiter(void 0, void 0, void 0, function () {
-    var peersDB, _i, BOOTSTRAP_PEERS_1, peer, server, _loop_1, _a, _b, peer;
-    return __generator(this, function (_c) {
-        switch (_c.label) {
+    var db, peerManager, server, _loop_1, _a, _b, peer, e_1_1;
+    var e_1, _c;
+    return __generator(this, function (_d) {
+        switch (_d.label) {
             case 0:
-                peersDB = new level_ts_1["default"](peersDBPath);
-                _i = 0, BOOTSTRAP_PEERS_1 = config_1.BOOTSTRAP_PEERS;
-                _c.label = 1;
+                db = new level_ts_1["default"](peersDBPath);
+                peerManager = new peermanager_1.PeerManager(db);
+                return [4 /*yield*/, peerManager.load()];
             case 1:
-                if (!(_i < BOOTSTRAP_PEERS_1.length)) return [3 /*break*/, 4];
-                peer = BOOTSTRAP_PEERS_1[_i];
-                return [4 /*yield*/, peersDB.put(peer, peer)];
-            case 2:
-                _c.sent();
-                _c.label = 3;
-            case 3:
-                _i++;
-                return [3 /*break*/, 1];
-            case 4:
+                _d.sent();
                 // Run Server
-                console.log("Server starting");
+                logger_1.logger.debug("Server starting");
                 server = net.createServer(function (socket) {
-                    socket.on("error", function (err) { return console.log("".concat(err)); });
-                    handleConnection(socket, peersDB);
+                    socket.on("error", function (err) { return logger_1.logger.warn("".concat(err)); });
+                    handleConnection(socket, peerManager);
                 });
                 server.listen(serverPort);
                 _loop_1 = function (peer) {
@@ -89,34 +123,47 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                         }
                     }
                     catch (err) {
-                        console.log("".concat(err));
+                        logger_1.logger.warn("".concat(err));
                         return "continue";
                     }
-                    console.log("Connecting to", peer);
+                    logger_1.logger.debug("Connecting to", peer);
                     var client = new net.Socket();
                     client.connect(port, host);
-                    client.on("connect", function () { return handleConnection(client, peersDB); });
-                    client.on("error", function (err) { return console.log("".concat(err)); });
+                    client.on("connect", function () { return handleConnection(client, peerManager); });
+                    client.on("error", function (err) { return logger_1.logger.warn("".concat(err)); });
                     client.on("close", function () {
                         setTimeout(function () {
                             client.connect(port, host);
                         }, 1000);
                     });
                 };
-                _a = 0;
-                return [4 /*yield*/, peersDB.all()];
-            case 5:
-                _b = _c.sent();
-                _c.label = 6;
-            case 6:
-                if (!(_a < _b.length)) return [3 /*break*/, 8];
-                peer = _b[_a];
+                _d.label = 2;
+            case 2:
+                _d.trys.push([2, 7, 8, 9]);
+                return [4 /*yield*/, peerManager.knownPeers];
+            case 3:
+                _a = __values.apply(void 0, [_d.sent()]), _b = _a.next();
+                _d.label = 4;
+            case 4:
+                if (!!_b.done) return [3 /*break*/, 6];
+                peer = _b.value;
                 _loop_1(peer);
-                _c.label = 7;
+                _d.label = 5;
+            case 5:
+                _b = _a.next();
+                return [3 /*break*/, 4];
+            case 6: return [3 /*break*/, 9];
             case 7:
-                _a++;
-                return [3 /*break*/, 6];
-            case 8: return [2 /*return*/];
+                e_1_1 = _d.sent();
+                e_1 = { error: e_1_1 };
+                return [3 /*break*/, 9];
+            case 8:
+                try {
+                    if (_b && !_b.done && (_c = _a["return"])) _c.call(_a);
+                }
+                finally { if (e_1) throw e_1.error; }
+                return [7 /*endfinally*/];
+            case 9: return [2 /*return*/];
         }
     });
 }); };

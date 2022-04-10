@@ -1,4 +1,27 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -37,18 +60,19 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 exports.PeerHandler = void 0;
-var semver = require("semver");
+var semver = __importStar(require("semver"));
 var config_1 = require("./config");
+var logger_1 = require("./logger");
 var messages_1 = require("./messages");
 var PeerHandler = /** @class */ (function () {
-    function PeerHandler(connIO, peersDB, selfHostWithPort) {
+    function PeerHandler(connIO, peerManager, selfHostWithPort) {
         this.connIO = connIO;
         this.finishedHandshake = false;
-        this.peersDB = peersDB;
+        this.peerManager = peerManager;
         this.selfHostWithPort = selfHostWithPort;
     }
     PeerHandler.prototype.onMessage = function (msgStr) {
-        console.log("Received: ".concat(msgStr));
+        logger_1.logger.debug("Received: ".concat(msgStr));
         var message = this.validateMessage(msgStr);
         if (messages_1.MessageRecord.guard(message)) {
             this.handleMessage(message);
@@ -97,22 +121,13 @@ var PeerHandler = /** @class */ (function () {
             return;
         }
         this.finishedHandshake = true;
-        console.log("Completed handshake");
+        logger_1.logger.debug("Completed handshake");
     };
     PeerHandler.prototype.onGetPeersMessage = function (msg) {
         return __awaiter(this, void 0, void 0, function () {
-            var knownPeers;
             return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.peersDB.all()];
-                    case 1:
-                        knownPeers = _a.sent();
-                        if (!knownPeers.includes(this.selfHostWithPort)) {
-                            knownPeers.push(this.selfHostWithPort);
-                        }
-                        this.connIO.writeToSocket({ type: "peers", peers: knownPeers });
-                        return [2 /*return*/];
-                }
+                this.connIO.writeToSocket({ type: "peers", peers: Array.from(this.peerManager.knownPeers) });
+                return [2 /*return*/];
             });
         });
     };
@@ -120,29 +135,13 @@ var PeerHandler = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             var _this = this;
             return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0: return [4 /*yield*/, Promise.all(msg.peers.map(function (peer) { return __awaiter(_this, void 0, void 0, function () {
-                            return __generator(this, function (_a) {
-                                switch (_a.label) {
-                                    case 0:
-                                        if (!(peer.length > 0)) return [3 /*break*/, 2];
-                                        return [4 /*yield*/, this.peersDB.put(peer, peer)];
-                                    case 1:
-                                        _a.sent();
-                                        _a.label = 2;
-                                    case 2: return [2 /*return*/];
-                                }
-                            });
-                        }); }))];
-                    case 1:
-                        _a.sent();
-                        return [2 /*return*/];
-                }
+                msg.peers.forEach(function (peer) { return _this.peerManager.peerDiscovered(peer); });
+                return [2 /*return*/];
             });
         });
     };
     PeerHandler.prototype.echo = function (msg) {
-        console.log("Received ".concat(msg.type, " message but not doing anything."));
+        logger_1.logger.debug("Received ".concat(msg.type, " message but not doing anything."));
     };
     return PeerHandler;
 }());
