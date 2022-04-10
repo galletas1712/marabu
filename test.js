@@ -66,7 +66,7 @@ function test2() {
         var client;
         return __generator(this, function (_a) {
             console.log("test #2: sending nothing");
-            console.log("expecting: hello -- or maybe we also expect getpeers?");
+            console.log("expecting: hello and getpeers");
             client = createNewClient([]);
             return [2 /*return*/];
         });
@@ -286,7 +286,6 @@ function test15() {
     });
 }
 var testsArray = [test2, test3, test4, test5, test6, test7, test9, test10, test8, test11, test12, test13, test14, test15];
-// const testsArray = [test8, test11, test12, test13, test14]
 function tests() {
     return __awaiter(this, void 0, void 0, function () {
         var _i, testsArray_1, test;
