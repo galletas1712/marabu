@@ -1,7 +1,7 @@
 import * as net from "net";
 import { canonicalize } from "json-canonicalize";
 import { PeerHandler } from "./peerhandler";
-import { HelloMsg, ErrorMsg, Message, GetPeersMsg } from "./messages";
+import { HelloMsg, ErrorMsg, Message, GetPeersMsg } from "./types/messages";
 import { CURRENT_VERSION, AGENT } from "./config";
 import { logger } from "./logger";
 

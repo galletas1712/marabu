@@ -35,6 +35,17 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var __values = (this && this.__values) || function(o) {
+    var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+    if (m) return m.call(o);
+    if (o && typeof o.length === "number") return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+};
 var __read = (this && this.__read) || function (o, n) {
     var m = typeof Symbol === "function" && o[Symbol.iterator];
     if (!m) return o;
@@ -71,8 +82,25 @@ var config_1 = require("./config");
 var PeerManager = /** @class */ (function () {
     function PeerManager(db) {
         this.knownPeers = new Set();
+        this.connectedPeers = new Map();
         this.db = db;
     }
+    PeerManager.prototype.broadcastMessage = function (msg) {
+        var e_1, _a;
+        try {
+            for (var _b = __values(this.connectedPeers.values()), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var peerSocket = _c.value;
+                peerSocket.writeToSocket(msg);
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+    };
     PeerManager.prototype.load = function () {
         return __awaiter(this, void 0, void 0, function () {
             var _a, _b, _c;
@@ -82,7 +110,7 @@ var PeerManager = /** @class */ (function () {
                         _d.trys.push([0, 2, , 4]);
                         _a = this;
                         _b = Set.bind;
-                        return [4 /*yield*/, this.db.get('peers')];
+                        return [4 /*yield*/, this.db.get("peers")];
                     case 1:
                         _a.knownPeers = new (_b.apply(Set, [void 0, _d.sent()]))();
                         logger_1.logger.debug("Loaded known peers: ".concat(__spreadArray([], __read(this.knownPeers), false)));
@@ -104,7 +132,7 @@ var PeerManager = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.db.put('peers', __spreadArray([], __read(this.knownPeers), false))];
+                    case 0: return [4 /*yield*/, this.db.put("peers", __spreadArray([], __read(this.knownPeers), false))];
                     case 1:
                         _a.sent();
                         return [2 /*return*/];
@@ -113,7 +141,7 @@ var PeerManager = /** @class */ (function () {
         });
     };
     PeerManager.prototype.peerDiscovered = function (peer) {
-        var peerParts = peer.split(':');
+        var peerParts = peer.split(":");
         if (peerParts.length != 2) {
             logger_1.logger.warn("Remote party reported knowledge of invalid peer ".concat(peer, ", which is not in the host:port format; skipping"));
             return;
@@ -130,6 +158,12 @@ var PeerManager = /** @class */ (function () {
         }
         this.knownPeers.add(peer);
         this.store(); // intentionally delayed await
+    };
+    PeerManager.prototype.peerConnected = function (peer, socketIOObj) {
+        this.connectedPeers.set(peer, socketIOObj);
+    };
+    PeerManager.prototype.peerDisconnected = function (peer) {
+        this.connectedPeers["delete"](peer);
     };
     return PeerManager;
 }());

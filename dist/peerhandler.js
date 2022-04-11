@@ -63,12 +63,13 @@ exports.PeerHandler = void 0;
 var semver = __importStar(require("semver"));
 var config_1 = require("./config");
 var logger_1 = require("./logger");
-var messages_1 = require("./messages");
+var messages_1 = require("./types/messages");
 var PeerHandler = /** @class */ (function () {
-    function PeerHandler(connIO, peerManager, selfHostWithPort) {
+    function PeerHandler(connIO, peerManager, objectManager, selfHostWithPort) {
         this.connIO = connIO;
         this.finishedHandshake = false;
         this.peerManager = peerManager;
+        this.objectManager = objectManager;
         this.selfHostWithPort = selfHostWithPort;
     }
     PeerHandler.prototype.onMessage = function (msgStr) {
@@ -126,7 +127,10 @@ var PeerHandler = /** @class */ (function () {
     PeerHandler.prototype.onGetPeersMessage = function (msg) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                this.connIO.writeToSocket({ type: "peers", peers: Array.from(this.peerManager.knownPeers) });
+                this.connIO.writeToSocket({
+                    type: "peers",
+                    peers: Array.from(this.peerManager.knownPeers)
+                });
                 return [2 /*return*/];
             });
         });
@@ -139,6 +143,22 @@ var PeerHandler = /** @class */ (function () {
                 return [2 /*return*/];
             });
         });
+    };
+    PeerHandler.prototype.onGetObjectMessage = function (msg) {
+        if (this.objectManager.objectExists(msg.objectid)) {
+            this.connIO.writeToSocket({ type: "object", object: this.objectManager.getObject(msg.objectid) });
+        }
+    };
+    PeerHandler.prototype.onIHaveObjectMessage = function (msg) {
+        if (this.objectManager.objectExists(msg.objectid)) {
+            this.connIO.writeToSocket({ type: "getobject", objectid: msg.objectid });
+        }
+    };
+    PeerHandler.prototype.onObjectMessage = function (msg) {
+        if (!this.objectManager.objectExists(this.objectManager.getObjectID(msg.object))) {
+            this.objectManager.storeObject(msg.object);
+            this.peerManager.broadcastMessage({ type: "ihaveobject", objectid: this.objectManager.getObjectID(msg.object) });
+        }
     };
     PeerHandler.prototype.echo = function (msg) {
         logger_1.logger.debug("Received ".concat(msg.type, " message but not doing anything."));

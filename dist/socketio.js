@@ -23,7 +23,11 @@ var ConnectedSocketIO = /** @class */ (function () {
     }
     ConnectedSocketIO.prototype.onConnect = function () {
         this.socket.setEncoding("utf8");
-        this.writeToSocket({ type: "hello", version: config_1.CURRENT_VERSION, agent: config_1.AGENT });
+        this.writeToSocket({
+            type: "hello",
+            version: config_1.CURRENT_VERSION,
+            agent: config_1.AGENT
+        });
         this.writeToSocket({ type: "getpeers" });
     };
     ConnectedSocketIO.prototype.onData = function (data, peerHandler) {

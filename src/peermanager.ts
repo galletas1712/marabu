@@ -2,7 +2,7 @@ import { logger } from "./logger";
 import isValidHostname from "is-valid-hostname";
 import Level from "level-ts";
 import { BOOTSTRAP_PEERS } from "./config";
-import { Message } from "./messages";
+import { Message } from "./types/messages";
 import { ConnectedSocketIO } from "./socketio";
 
 export class PeerManager {

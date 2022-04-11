@@ -12,7 +12,7 @@ import {
   IHaveObjectMsg,
   GetObjectMsg,
   ObjectMsg,
-} from "./messages";
+} from "./types/messages";
 import { ObjectManager } from "./objectmanager";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";

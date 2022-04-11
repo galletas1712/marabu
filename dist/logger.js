@@ -26,7 +26,7 @@ exports.__esModule = true;
 exports.logger = void 0;
 var winston = __importStar(require("winston"));
 exports.logger = winston.createLogger({
-    level: 'debug',
+    level: "debug",
     format: winston.format.simple(),
     transports: new winston.transports.Console()
 });

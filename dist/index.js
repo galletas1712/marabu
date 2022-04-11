@@ -79,36 +79,44 @@ var socketio_1 = require("./socketio");
 var peerhandler_1 = require("./peerhandler");
 var peermanager_1 = require("./peermanager");
 var logger_1 = require("./logger");
+var objectmanager_1 = require("./objectmanager");
 var args = process.argv.slice(2);
 var peersDBPath = args[0];
-var serverHostname = args[1];
-var serverPort = args[2];
-var handleConnection = function (socket, peerManager) { return __awaiter(void 0, void 0, void 0, function () {
-    var connIO, peerHandler;
+var objectDBPath = args[1];
+var serverHostname = args[2];
+var serverPort = args[3];
+var handleConnection = function (socket, peerManager, objectManager) { return __awaiter(void 0, void 0, void 0, function () {
+    var peerAddressObj, peerAddress, connIO, peerHandler;
     return __generator(this, function (_a) {
+        peerAddressObj = socket.address();
+        peerAddress = peerAddressObj.family + ":" + peerAddressObj.port;
         connIO = new socketio_1.ConnectedSocketIO(socket);
-        peerHandler = new peerhandler_1.PeerHandler(connIO, peerManager, serverHostname + ":" + serverPort);
+        peerHandler = new peerhandler_1.PeerHandler(connIO, peerManager, objectManager, serverHostname + ":" + serverPort);
         connIO.onConnect();
+        peerManager.peerConnected(peerAddress, connIO);
         socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
+        socket.on("close", function () { return peerManager.peerDisconnected(peerAddress); });
         return [2 /*return*/];
     });
 }); };
 var runNode = function () { return __awaiter(void 0, void 0, void 0, function () {
-    var db, peerManager, server, _loop_1, _a, _b, peer, e_1_1;
+    var peersDB, objectDB, peerManager, objectManager, server, _loop_1, _a, _b, peer, e_1_1;
     var e_1, _c;
     return __generator(this, function (_d) {
         switch (_d.label) {
             case 0:
-                db = new level_ts_1["default"](peersDBPath);
-                peerManager = new peermanager_1.PeerManager(db);
+                peersDB = new level_ts_1["default"](peersDBPath);
+                objectDB = new level_ts_1["default"](objectDBPath);
+                peerManager = new peermanager_1.PeerManager(peersDB);
                 return [4 /*yield*/, peerManager.load()];
             case 1:
                 _d.sent();
+                objectManager = new objectmanager_1.ObjectManager(objectDB);
                 // Run Server
                 logger_1.logger.debug("Server starting");
                 server = net.createServer(function (socket) {
                     socket.on("error", function (err) { return logger_1.logger.warn("".concat(err)); });
-                    handleConnection(socket, peerManager);
+                    handleConnection(socket, peerManager, objectManager);
                 });
                 server.listen(serverPort);
                 _loop_1 = function (peer) {
@@ -129,7 +137,7 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                     logger_1.logger.debug("Connecting to", peer);
                     var client = new net.Socket();
                     client.connect(port, host);
-                    client.on("connect", function () { return handleConnection(client, peerManager); });
+                    client.on("connect", function () { return handleConnection(client, peerManager, objectManager); });
                     client.on("error", function (err) { return logger_1.logger.warn("".concat(err)); });
                     client.on("close", function () {
                         setTimeout(function () {
