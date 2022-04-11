@@ -9,7 +9,11 @@ import {
   Message,
   MessageRecord,
   PeersMsg,
+  IHaveObjectMsg,
+  GetObjectMsg,
+  ObjectMsg,
 } from "./messages";
+import { ObjectManager } from "./objectmanager";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
 
@@ -17,16 +21,19 @@ export class PeerHandler {
   connIO: ConnectedSocketIO;
   finishedHandshake: boolean;
   peerManager: PeerManager;
+  objectManager: ObjectManager;
   selfHostWithPort: string;
 
   constructor(
     connIO: ConnectedSocketIO,
     peerManager: PeerManager,
+    objectManager: ObjectManager,
     selfHostWithPort: string
   ) {
     this.connIO = connIO;
     this.finishedHandshake = false;
     this.peerManager = peerManager;
+    this.objectManager = objectManager;
     this.selfHostWithPort = selfHostWithPort;
   }
 
@@ -95,6 +102,25 @@ export class PeerHandler {
 
   async onPeersMessage(msg: PeersMsg) {
     msg.peers.forEach((peer: string) => this.peerManager.peerDiscovered(peer));
+  }
+
+  onGetObjectMessage(msg: GetObjectMsg) {
+    if (this.objectManager.objectExists(msg.objectid)) {
+      this.connIO.writeToSocket({ type: "object", object: this.objectManager.getObject(msg.objectid) });
+    }
+  }
+
+  onIHaveObjectMessage(msg: IHaveObjectMsg) {
+    if (this.objectManager.objectExists(msg.objectid)) {
+      this.connIO.writeToSocket({ type: "getobject", objectid: msg.objectid } as GetObjectMsg);
+    }
+  }
+
+  onObjectMessage(msg: ObjectMsg) {
+    if (!this.objectManager.objectExists(this.objectManager.getObjectID(msg.object))) {
+      this.objectManager.storeObject(msg.object);
+      this.peerManager.broadcastMessage({ type: "ihaveobject", objectid: this.objectManager.getObjectID(msg.object) });
+    }
   }
 
   echo(msg: Message) {
