@@ -106,20 +106,37 @@ export class PeerHandler {
 
   onGetObjectMessage(msg: GetObjectMsg) {
     if (this.objectManager.objectExists(msg.objectid)) {
-      this.connIO.writeToSocket({ type: "object", object: this.objectManager.getObject(msg.objectid) });
+      this.connIO.writeToSocket({
+        type: "object",
+        object: this.objectManager.getObject(msg.objectid),
+      });
     }
   }
 
   onIHaveObjectMessage(msg: IHaveObjectMsg) {
     if (this.objectManager.objectExists(msg.objectid)) {
-      this.connIO.writeToSocket({ type: "getobject", objectid: msg.objectid } as GetObjectMsg);
+      this.connIO.writeToSocket({
+        type: "getobject",
+        objectid: msg.objectid,
+      } as GetObjectMsg);
     }
   }
 
-  onObjectMessage(msg: ObjectMsg) {
-    if (!this.objectManager.objectExists(this.objectManager.getObjectID(msg.object))) {
-      this.objectManager.storeObject(msg.object);
-      this.peerManager.broadcastMessage({ type: "ihaveobject", objectid: this.objectManager.getObjectID(msg.object) });
+  async onObjectMessage(msg: ObjectMsg) {
+    if (await this.objectManager.validateObject(msg)) {
+      if (
+        !(await this.objectManager.objectExists(
+          this.objectManager.getObjectID(msg.object)
+        ))
+      ) {
+        await this.objectManager.storeObject(msg.object);
+        this.peerManager.broadcastMessage({
+          type: "ihaveobject",
+          objectid: this.objectManager.getObjectID(msg.object),
+        });
+      }
+    } else {
+      this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
     }
   }
 
