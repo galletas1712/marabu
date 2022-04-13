@@ -64,10 +64,12 @@ export class PeerManager {
   }
 
   peerConnected(peer: string, socketIOObj: ConnectedSocketIO) {
+    console.log(peer, "connected");
     this.connectedPeers.set(peer, socketIOObj);
   }
 
   peerDisconnected(peer: string) {
+    console.log(peer, "disconnected");
     this.connectedPeers.delete(peer);
   }
 }

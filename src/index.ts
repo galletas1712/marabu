@@ -19,7 +19,7 @@ const handleConnection = async (
   objectManager: ObjectManager
 ) => {
   const peerAddressObj = socket.address() as net.AddressInfo;
-  const peerAddress = peerAddressObj.family + ":" + peerAddressObj.port;
+  const peerID = Math.floor(Math.random() * 1e9).toString();
 
   const connIO = new ConnectedSocketIO(socket);
   const peerHandler = new PeerHandler(
@@ -29,9 +29,9 @@ const handleConnection = async (
     serverHostname + ":" + serverPort
   );
   connIO.onConnect();
-  peerManager.peerConnected(peerAddress, connIO);
+  peerManager.peerConnected(peerID, connIO);
   socket.on("data", (data: string) => connIO.onData(data, peerHandler));
-  socket.on("close", () => peerManager.peerDisconnected(peerAddress));
+  socket.on("close", () => peerManager.peerDisconnected(peerID));
 };
 
 const runNode = async () => {

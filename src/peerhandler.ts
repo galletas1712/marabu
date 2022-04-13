@@ -136,7 +136,8 @@ export class PeerHandler {
     logger.debug("On object message:", msg);
     if (await this.objectManager.validateObject(msg.object)) {
       if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
-        await this.objectManager.storeObject(msg.object);
+        this.objectManager.storeObject(msg.object);
+        console.log("hello");
         this.peerManager.broadcastMessage({
           type: "ihaveobject",
           objectid: getObjectID(msg.object),

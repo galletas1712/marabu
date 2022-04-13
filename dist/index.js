@@ -86,16 +86,16 @@ var objectDBPath = args[1];
 var serverHostname = args[2];
 var serverPort = args[3];
 var handleConnection = function (socket, peerManager, objectManager) { return __awaiter(void 0, void 0, void 0, function () {
-    var peerAddressObj, peerAddress, connIO, peerHandler;
+    var peerAddressObj, peerID, connIO, peerHandler;
     return __generator(this, function (_a) {
         peerAddressObj = socket.address();
-        peerAddress = peerAddressObj.family + ":" + peerAddressObj.port;
+        peerID = Math.floor(Math.random() * 1e9).toString();
         connIO = new socketio_1.ConnectedSocketIO(socket);
         peerHandler = new peerhandler_1.PeerHandler(connIO, peerManager, objectManager, serverHostname + ":" + serverPort);
         connIO.onConnect();
-        peerManager.peerConnected(peerAddress, connIO);
+        peerManager.peerConnected(peerID, connIO);
         socket.on("data", function (data) { return connIO.onData(data, peerHandler); });
-        socket.on("close", function () { return peerManager.peerDisconnected(peerAddress); });
+        socket.on("close", function () { return peerManager.peerDisconnected(peerID); });
         return [2 /*return*/];
     });
 }); };

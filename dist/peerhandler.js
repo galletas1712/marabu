@@ -209,23 +209,22 @@ var PeerHandler = /** @class */ (function () {
                         logger_1.logger.debug("On object message:", msg);
                         return [4 /*yield*/, this.objectManager.validateObject(msg.object)];
                     case 1:
-                        if (!_a.sent()) return [3 /*break*/, 5];
+                        if (!_a.sent()) return [3 /*break*/, 3];
                         return [4 /*yield*/, this.objectManager.objectExists((0, objectmanager_1.getObjectID)(msg.object))];
                     case 2:
-                        if (!!(_a.sent())) return [3 /*break*/, 4];
-                        return [4 /*yield*/, this.objectManager.storeObject(msg.object)];
+                        if (!(_a.sent())) {
+                            this.objectManager.storeObject(msg.object);
+                            console.log("hello");
+                            this.peerManager.broadcastMessage({
+                                type: "ihaveobject",
+                                objectid: (0, objectmanager_1.getObjectID)(msg.object)
+                            });
+                        }
+                        return [3 /*break*/, 4];
                     case 3:
-                        _a.sent();
-                        this.peerManager.broadcastMessage({
-                            type: "ihaveobject",
-                            objectid: (0, objectmanager_1.getObjectID)(msg.object)
-                        });
-                        _a.label = 4;
-                    case 4: return [3 /*break*/, 6];
-                    case 5:
                         this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
-                        _a.label = 6;
-                    case 6: return [2 /*return*/];
+                        _a.label = 4;
+                    case 4: return [2 /*return*/];
                 }
             });
         });
