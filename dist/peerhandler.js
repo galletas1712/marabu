@@ -167,23 +167,21 @@ var PeerHandler = /** @class */ (function () {
                 switch (_a.label) {
                     case 0: return [4 /*yield*/, this.objectManager.validateObject(msg)];
                     case 1:
-                        if (!_a.sent()) return [3 /*break*/, 5];
-                        return [4 /*yield*/, this.objectManager.objectExists((0, objectmanager_1.getObjectID)(msg.object))];
-                    case 2:
-                        if (!!(_a.sent())) return [3 /*break*/, 4];
+                        if (!_a.sent()) return [3 /*break*/, 3];
+                        // TODO: check if we should only gossip new messages
                         return [4 /*yield*/, this.objectManager.storeObject(msg.object)];
-                    case 3:
+                    case 2:
+                        // TODO: check if we should only gossip new messages
                         _a.sent();
                         this.peerManager.broadcastMessage({
                             type: "ihaveobject",
                             objectid: (0, objectmanager_1.getObjectID)(msg.object)
                         });
-                        _a.label = 4;
-                    case 4: return [3 /*break*/, 6];
-                    case 5:
+                        return [3 /*break*/, 4];
+                    case 3:
                         this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
-                        _a.label = 6;
-                    case 6: return [2 /*return*/];
+                        _a.label = 4;
+                    case 4: return [2 /*return*/];
                 }
             });
         });
