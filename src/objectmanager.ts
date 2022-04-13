@@ -52,62 +52,73 @@ export class ObjectManager {
     }
 
     async validateObject(obj: Object): Promise<boolean> {
-        if (NonCoinbaseTransactionRecord.guard(obj)) {
-            const nulledTx = genSignatureNulledTransaction(obj);
+        try {
+            if (NonCoinbaseTransactionRecord.guard(obj)) {
+                const nulledTx = genSignatureNulledTransaction(obj);
 
-            let sumInputs = 0;
-            let sumOutputs = 0;
+                let sumInputs = 0;
+                let sumOutputs = 0;
 
-            // Check inputs
-            for (const input of obj.inputs) {
-                // Check outpoint
-                if (!await this.objectExists(input.outpoint.txid)) {
+                // Check inputs
+                for (const input of obj.inputs) {
+                    // Check outpoint
+                    if (!await this.objectExists(input.outpoint.txid)) {
+                        return false;
+                    }
+                    const outpointTx: Transaction = await this.getObject(input.outpoint.txid);
+                    if (input.outpoint.index >= outpointTx.outputs.length) {
+                        console.log("2");
+                        return false;
+                    }
+
+                    // Check signature
+                    if (!isValidHex(input.sig, 128)) {
+                        console.log('3');
+                        return false;
+                    }
+                    const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
+                    if (!isValidHex(pubkey, 64)) {
+                        throw Error("Outpoint public key is invalid");
+                    }
+
+                    const sig_u8 = Uint8Array.from(Buffer.from(input.sig, "hex"));
+                    const pubkey_u8 = Uint8Array.from(Buffer.from(pubkey, "hex"));
+                    if (!(await ed.verify(sig_u8, canonicalize(nulledTx), pubkey_u8))) {
+                        console.log('4');
+                        return false;
+                    }
+
+                    sumInputs += outpointTx.outputs[input.outpoint.index].value;
+                }
+
+                // Check outputs: pubkey is valid format and value is non-negative
+                for(const output of obj.outputs) {
+                    if (!isValidHex(output.pubkey, 64) || output.value < 0) {
+                        console.log('5');
+                        return false;
+                    }
+                    sumOutputs += output.value;
+                }
+
+                // Check conservation of UTXOs
+                if (sumInputs != sumOutputs) {
+                    console.log('6');
                     return false;
                 }
-                const outpointTx: Transaction = await this.getObject(input.outpoint.txid);
-                if (input.outpoint.index >= outpointTx.outputs.length) {
-                    return false;
-                }
-
-                // Check signature
-                if (!isValidHex(input.sig, 128)) {
-                    return false;
-                }
-                const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
-                if (!isValidHex(pubkey, 64)) {
-                    throw Error("Outpoint public key is invalid");
-                }
-
-                const sig_u8 = Uint8Array.from(Buffer.from(input.sig, "hex"));
-                const pubkey_u8 = Uint8Array.from(Buffer.from(pubkey, "hex"));
-                if (!ed.verify(sig_u8, canonicalize(nulledTx), pubkey_u8)) {
-                    return false;
-                }
-
-                sumInputs += outpointTx.outputs[input.outpoint.index].value;
-            }
-
-            // Check outputs: pubkey is valid format and value is non-negative
-            for(const output of obj.outputs) {
-                if (!isValidHex(output.pubkey, 64) || output.value < 0) {
-                    return false;
-                }
-                sumOutputs += output.value;
-            }
-
-            // Check conservation of UTXOs
-            if (sumInputs != sumOutputs) {
-                return false;
-            }
 
             return true;
-        } else if (CoinbaseTransactionRecord.guard(obj)) {
-            return true;
-        } else if (BlockRecord.guard(obj)) {
-            return true;
+            } else if (CoinbaseTransactionRecord.guard(obj)) {
+                return true;
+            } else if (BlockRecord.guard(obj)) {
+                return true;
+            }
+
+            //not a valid transaction format; need to return error to node that sent it to us
+            console.log('7');
+            return false;
+        } catch(err){
+            console.log("Validation failed" + err);
+            return false;
         }
-
-        //not a valid transaction format; need to return error to node that sent it to us
-        return false;
     }
 }

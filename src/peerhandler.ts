@@ -111,16 +111,20 @@ export class PeerHandler {
   }
 
   async onGetObjectMessage(msg: GetObjectMsg) {
-    if (this.objectManager.objectExists(msg.objectid)) {
-      this.connIO.writeToSocket({
-        type: "object",
-        object: await this.objectManager.getObject(msg.objectid),
-      });
+    try{
+      if (await this.objectManager.objectExists(msg.objectid)) {
+        this.connIO.writeToSocket({
+          type: "object",
+          object: await this.objectManager.getObject(msg.objectid),
+        });
+      }
+    } catch (err){
+      console.log("getting object failed...");
     }
   }
 
-  onIHaveObjectMessage(msg: IHaveObjectMsg) {
-    if (!this.objectManager.objectExists(msg.objectid)) {
+  async onIHaveObjectMessage(msg: IHaveObjectMsg) {
+    if (!(await this.objectManager.objectExists(msg.objectid))) {
       this.connIO.writeToSocket({
         type: "getobject",
         objectid: msg.objectid,
