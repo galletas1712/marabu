@@ -19,8 +19,8 @@ const genSignatureNulledTransaction = (tx: NonCoinbaseTransaction): NulledNonCoi
 };
 
 const isValidHex = (hexString: string, expectedLength: number): boolean => {
-    for (const c of hexString) {
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+    for (let i = 0; i < hexString.length; i++) {
+        if (!((hexString[i] >= '0' && hexString[i] <= '9') || (hexString[i] >= 'a' && hexString[i] <= 'f'))) {
             return false;
         }
     }

@@ -79,6 +79,12 @@ export class PeerHandler {
       this.onGetPeersMessage(msg);
     } else if (msg.type == "peers") {
       this.onPeersMessage(msg);
+    } else if (msg.type == "object"){
+      this.onObjectMessage(msg);
+    } else if (msg.type == "ihaveobject"){
+      this.onIHaveObjectMessage(msg);
+    } else if (msg.type == "getobject"){
+      this.onGetObjectMessage(msg);
     } else {
       this.echo(msg);
     }
