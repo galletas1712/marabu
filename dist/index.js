@@ -120,8 +120,8 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                 });
                 server.listen(serverPort);
                 _loop_1 = function (peer) {
-                    var host;
-                    var port;
+                    var host = void 0;
+                    var port = void 0;
                     try {
                         var lastColon = peer.lastIndexOf(":");
                         host = peer.slice(0, lastColon).trim();
@@ -139,11 +139,6 @@ var runNode = function () { return __awaiter(void 0, void 0, void 0, function ()
                     client.connect(port, host);
                     client.on("connect", function () { return handleConnection(client, peerManager, objectManager); });
                     client.on("error", function (err) { return logger_1.logger.warn("".concat(err)); });
-                    client.on("close", function () {
-                        setTimeout(function () {
-                            client.connect(port, host);
-                        }, 1000);
-                    });
                 };
                 _d.label = 2;
             case 2:

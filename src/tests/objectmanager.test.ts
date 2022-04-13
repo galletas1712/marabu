@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import level from "level-ts";
-import { getObjectID, isValidHex, ObjectManager } from "../objectmanager";
+import { getObjectID, isValidHex, ObjectManager, verifySig } from "../objectmanager";
 import * as ed from "@noble/ed25519";
 import "mocha";
 import rimraf from "rimraf";
@@ -8,9 +8,11 @@ import {
   Block,
   CoinbaseTransaction,
   NonCoinbaseTransaction,
+  NonCoinbaseTransactionRecord,
   TxOutpoint,
 } from "../types/transactions";
 import { canonicalize } from "json-canonicalize";
+import { u8ToHex } from "../util";
 
 describe("isValidHex tests", () => {
   it("Should accept lowercase hex strings of given length", () => {
@@ -30,23 +32,23 @@ describe("ObjectManager tests", async () => {
   const sk1 = ed.utils.randomPrivateKey();
   const sk2 = ed.utils.randomPrivateKey();
   const sk3 = ed.utils.randomPrivateKey();
-  const pk1 = Buffer.from(await ed.getPublicKey(sk1)).toString("hex");
-  const pk2 = Buffer.from(await ed.getPublicKey(sk2)).toString("hex");
-  const pk3 = Buffer.from(await ed.getPublicKey(sk3)).toString("hex");
+  const pk1 = await ed.getPublicKey(sk1);
+  const pk2 = await ed.getPublicKey(sk2);
+  const pk3 = await ed.getPublicKey(sk3);
   const cbTx: CoinbaseTransaction = {
     type: "transaction",
     height: 1,
     outputs: [
       {
-        pubkey: pk1,
+        pubkey: u8ToHex(pk1),
         value: 10,
       },
       {
-        pubkey: pk2,
+        pubkey: u8ToHex(pk2),
         value: 20,
       },
       {
-        pubkey: pk3,
+        pubkey: u8ToHex(pk3),
         value: 30,
       },
     ],
@@ -124,24 +126,50 @@ describe("ObjectManager tests", async () => {
       ],
       outputs: [
         {
-          pubkey: pk1,
+          pubkey: u8ToHex(pk1),
           value: 15,
         },
         {
-          pubkey: pk3,
+          pubkey: u8ToHex(pk3),
           value: 15,
         },
       ],
     } as NonCoinbaseTransaction;
 
     const encoder = new TextEncoder();
-    const encodedTx = Uint8Array.from(encoder.encode(canonicalize(tx)));
-    const sig1 = Buffer.from(await ed.sign(encodedTx, await ed.getPublicKey(sk1))).toString("hex");
-    const sig2 = Buffer.from(await ed.sign(encodedTx, await ed.getPublicKey(sk2))).toString("hex");
-    tx.inputs[0].sig = sig1;
-    tx.inputs[1].sig = sig2;
+    const encodedTx = encoder.encode(canonicalize(tx));
+    const sig1 = await ed.sign(encodedTx, sk1);
+    const sig2 = await ed.sign(encodedTx, sk2);
+
+    tx.inputs[0].sig = u8ToHex(sig1);
+    tx.inputs[1].sig = u8ToHex(sig2);
 
     expect(await oj.validateObject(tx)).to.equal(true);
+  });
+
+  it("Another valid transaction", async () => {
+    let txn: CoinbaseTransaction = {
+      type: "transaction",
+      height: 128,
+      outputs: [{ pubkey: u8ToHex(pk1), value: 100 }],
+    };
+    let txnid = getObjectID(txn);
+    let txn2: NonCoinbaseTransaction = {
+      type: "transaction",
+      inputs: [{ outpoint: { txid: txnid, index: 0 }, sig: null }],
+      outputs: [{ pubkey: u8ToHex(pk1), value: 100 }],
+    };
+
+    const encoder = new TextEncoder();
+    const encodedTx = encoder.encode(canonicalize(txn2));
+    const sig1 = u8ToHex(
+      await ed.sign(encodedTx, sk1)
+    );
+    txn2.inputs[0].sig = sig1;
+
+    expect(await oj.validateObject(txn)).to.equal(true);
+    oj.storeObject(txn);
+    expect(await oj.validateObject(txn2)).to.equal(true);
   });
 
   it("Should invalidate any object that does not fall into the known categories", async () => {
@@ -179,11 +207,11 @@ describe("ObjectManager tests", async () => {
       ],
       outputs: [
         {
-          pubkey: pk1,
+          pubkey: u8ToHex(pk1),
           value: 15,
         },
         {
-          pubkey: pk3,
+          pubkey: u8ToHex(pk3),
           value: 15,
         },
       ],

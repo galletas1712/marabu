@@ -133,15 +133,15 @@ export class PeerHandler {
   }
 
   async onObjectMessage(msg: ObjectMsg) {
+    logger.debug("On object message:", msg);
     if (await this.objectManager.validateObject(msg.object)) {
-      // TODO: check if we should only gossip new messages
       if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
         await this.objectManager.storeObject(msg.object);
+        this.peerManager.broadcastMessage({
+          type: "ihaveobject",
+          objectid: getObjectID(msg.object),
+        });
       }
-      this.peerManager.broadcastMessage({
-        type: "ihaveobject",
-        objectid: getObjectID(msg.object),
-      });
     } else {
       this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
     }

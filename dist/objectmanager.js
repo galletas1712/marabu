@@ -73,14 +73,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 exports.__esModule = true;
-exports.ObjectManager = exports.isValidHex = exports.genSignatureNulledTransaction = exports.getObjectID = void 0;
+exports.ObjectManager = exports.isValidHex = exports.verifySig = exports.genSignatureNulledTransaction = exports.getObjectID = void 0;
 var json_canonicalize_1 = require("json-canonicalize");
 var fast_sha256_1 = __importDefault(require("fast-sha256"));
 var ed = __importStar(require("@noble/ed25519"));
 var transactions_1 = require("./types/transactions");
+var util_1 = require("./util");
 var getObjectID = function (obj) {
     var encoder = new TextEncoder();
-    return Buffer.from((0, fast_sha256_1["default"])(encoder.encode((0, json_canonicalize_1.canonicalize)(obj)))).toString('hex');
+    return Buffer.from((0, fast_sha256_1["default"])(encoder.encode((0, json_canonicalize_1.canonicalize)(obj)))).toString("hex");
 };
 exports.getObjectID = getObjectID;
 var genSignatureNulledTransaction = function (tx) {
@@ -96,40 +97,45 @@ var genSignatureNulledTransaction = function (tx) {
     };
 };
 exports.genSignatureNulledTransaction = genSignatureNulledTransaction;
+var verifySig = function (sig, msg, pubkey) { return __awaiter(void 0, void 0, void 0, function () {
+    var sig_u8, pubkey_u8, encoder, msg_u8;
+    return __generator(this, function (_a) {
+        sig_u8 = (0, util_1.hexTou8)(sig);
+        pubkey_u8 = (0, util_1.hexTou8)(pubkey);
+        encoder = new TextEncoder();
+        msg_u8 = encoder.encode(msg);
+        return [2 /*return*/, ed.verify(sig_u8, msg_u8, pubkey_u8)];
+    });
+}); };
+exports.verifySig = verifySig;
 var isValidHex = function (hexString, expectedLength) {
-    var e_1, _a;
-    try {
-        for (var hexString_1 = __values(hexString), hexString_1_1 = hexString_1.next(); !hexString_1_1.done; hexString_1_1 = hexString_1.next()) {
-            var c = hexString_1_1.value;
-            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
-                return false;
-            }
+    for (var i = 0; i < hexString.length; i++) {
+        if (!((hexString[i] >= "0" && hexString[i] <= "9") ||
+            (hexString[i] >= "a" && hexString[i] <= "f"))) {
+            return false;
         }
     }
-    catch (e_1_1) { e_1 = { error: e_1_1 }; }
-    finally {
-        try {
-            if (hexString_1_1 && !hexString_1_1.done && (_a = hexString_1["return"])) _a.call(hexString_1);
-        }
-        finally { if (e_1) throw e_1.error; }
-    }
-    return hexString.length === expectedLength && hexString.toLowerCase() === hexString;
+    return (hexString.length === expectedLength && hexString.toLowerCase() === hexString);
 };
 exports.isValidHex = isValidHex;
 var ObjectManager = /** @class */ (function () {
     function ObjectManager(db) {
         this.db = db;
+        this.cache = new Map();
     }
     ObjectManager.prototype.objectExists = function (objID) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, this.db.exists(objID)];
+                return [2 /*return*/, this.cache.has(objID) || this.db.exists(objID)];
             });
         });
     };
     ObjectManager.prototype.getObject = function (objID) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
+                if (this.cache.has(objID)) {
+                    return [2 /*return*/, this.cache.get(objID)];
+                }
                 return [2 /*return*/, this.db.get(objID)];
             });
         });
@@ -138,9 +144,12 @@ var ObjectManager = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.db.put((0, exports.getObjectID)(obj), obj)];
+                    case 0:
+                        this.cache.set((0, exports.getObjectID)(obj), obj);
+                        return [4 /*yield*/, this.db.put((0, exports.getObjectID)(obj), obj)];
                     case 1:
                         _a.sent();
+                        this.cache["delete"]((0, exports.getObjectID)(obj));
                         return [2 /*return*/];
                 }
             });
@@ -148,22 +157,23 @@ var ObjectManager = /** @class */ (function () {
     };
     ObjectManager.prototype.validateObject = function (obj) {
         return __awaiter(this, void 0, void 0, function () {
-            var nulledTx, sumInputs, sumOutputs, _a, _b, input, outpointTx, pubkey, sig_u8, pubkey_u8, e_2_1, _c, _d, output;
-            var e_2, _e, e_3, _f;
+            var nulledTx, sumInputs, sumOutputs, _a, _b, input, outpointTx, pubkey, sigVerified, e_1_1, _c, _d, output, err_1;
+            var e_1, _e, e_2, _f;
             return __generator(this, function (_g) {
                 switch (_g.label) {
                     case 0:
-                        if (!transactions_1.NonCoinbaseTransactionRecord.guard(obj)) return [3 /*break*/, 10];
+                        _g.trys.push([0, 13, , 14]);
+                        if (!transactions_1.NonCoinbaseTransactionRecord.guard(obj)) return [3 /*break*/, 11];
                         nulledTx = (0, exports.genSignatureNulledTransaction)(obj);
                         sumInputs = 0;
                         sumOutputs = 0;
                         _g.label = 1;
                     case 1:
-                        _g.trys.push([1, 7, 8, 9]);
+                        _g.trys.push([1, 8, 9, 10]);
                         _a = __values(obj.inputs), _b = _a.next();
                         _g.label = 2;
                     case 2:
-                        if (!!_b.done) return [3 /*break*/, 6];
+                        if (!!_b.done) return [3 /*break*/, 7];
                         input = _b.value;
                         return [4 /*yield*/, this.objectExists(input.outpoint.txid)];
                     case 3:
@@ -185,28 +195,29 @@ var ObjectManager = /** @class */ (function () {
                         if (!(0, exports.isValidHex)(pubkey, 64)) {
                             throw Error("Outpoint public key is invalid");
                         }
-                        sig_u8 = Uint8Array.from(Buffer.from(input.sig, "hex"));
-                        pubkey_u8 = Uint8Array.from(Buffer.from(pubkey, "hex"));
-                        if (!ed.verify(sig_u8, (0, json_canonicalize_1.canonicalize)(nulledTx), pubkey_u8)) {
+                        return [4 /*yield*/, (0, exports.verifySig)(input.sig, (0, json_canonicalize_1.canonicalize)(nulledTx), pubkey)];
+                    case 5:
+                        sigVerified = _g.sent();
+                        if (!sigVerified) {
                             return [2 /*return*/, false];
                         }
                         sumInputs += outpointTx.outputs[input.outpoint.index].value;
-                        _g.label = 5;
-                    case 5:
+                        _g.label = 6;
+                    case 6:
                         _b = _a.next();
                         return [3 /*break*/, 2];
-                    case 6: return [3 /*break*/, 9];
-                    case 7:
-                        e_2_1 = _g.sent();
-                        e_2 = { error: e_2_1 };
-                        return [3 /*break*/, 9];
+                    case 7: return [3 /*break*/, 10];
                     case 8:
+                        e_1_1 = _g.sent();
+                        e_1 = { error: e_1_1 };
+                        return [3 /*break*/, 10];
+                    case 9:
                         try {
                             if (_b && !_b.done && (_e = _a["return"])) _e.call(_a);
                         }
-                        finally { if (e_2) throw e_2.error; }
+                        finally { if (e_1) throw e_1.error; }
                         return [7 /*endfinally*/];
-                    case 9:
+                    case 10:
                         try {
                             // Check outputs: pubkey is valid format and value is non-negative
                             for (_c = __values(obj.outputs), _d = _c.next(); !_d.done; _d = _c.next()) {
@@ -217,29 +228,34 @@ var ObjectManager = /** @class */ (function () {
                                 sumOutputs += output.value;
                             }
                         }
-                        catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                        catch (e_2_1) { e_2 = { error: e_2_1 }; }
                         finally {
                             try {
                                 if (_d && !_d.done && (_f = _c["return"])) _f.call(_c);
                             }
-                            finally { if (e_3) throw e_3.error; }
+                            finally { if (e_2) throw e_2.error; }
                         }
                         // Check conservation of UTXOs
                         if (sumInputs != sumOutputs) {
                             return [2 /*return*/, false];
                         }
                         return [2 /*return*/, true];
-                    case 10:
+                    case 11:
                         if (transactions_1.CoinbaseTransactionRecord.guard(obj)) {
                             return [2 /*return*/, true];
                         }
                         else if (transactions_1.BlockRecord.guard(obj)) {
                             return [2 /*return*/, true];
                         }
-                        _g.label = 11;
-                    case 11: 
+                        _g.label = 12;
+                    case 12: 
                     //not a valid transaction format; need to return error to node that sent it to us
                     return [2 /*return*/, false];
+                    case 13:
+                        err_1 = _g.sent();
+                        console.log("Validation failed" + err_1);
+                        return [2 /*return*/, false];
+                    case 14: return [2 /*return*/];
                 }
             });
         });

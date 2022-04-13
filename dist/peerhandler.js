@@ -113,6 +113,15 @@ var PeerHandler = /** @class */ (function () {
         else if (msg.type == "peers") {
             this.onPeersMessage(msg);
         }
+        else if (msg.type == "object") {
+            this.onObjectMessage(msg);
+        }
+        else if (msg.type == "ihaveobject") {
+            this.onIHaveObjectMessage(msg);
+        }
+        else if (msg.type == "getobject") {
+            this.onGetObjectMessage(msg);
+        }
         else {
             this.echo(msg);
         }
@@ -146,42 +155,77 @@ var PeerHandler = /** @class */ (function () {
         });
     };
     PeerHandler.prototype.onGetObjectMessage = function (msg) {
-        if (this.objectManager.objectExists(msg.objectid)) {
-            this.connIO.writeToSocket({
-                type: "object",
-                object: this.objectManager.getObject(msg.objectid)
+        return __awaiter(this, void 0, void 0, function () {
+            var _a, _b, err_1;
+            var _c;
+            return __generator(this, function (_d) {
+                switch (_d.label) {
+                    case 0:
+                        _d.trys.push([0, 4, , 5]);
+                        return [4 /*yield*/, this.objectManager.objectExists(msg.objectid)];
+                    case 1:
+                        if (!_d.sent()) return [3 /*break*/, 3];
+                        _b = (_a = this.connIO).writeToSocket;
+                        _c = {
+                            type: "object"
+                        };
+                        return [4 /*yield*/, this.objectManager.getObject(msg.objectid)];
+                    case 2:
+                        _b.apply(_a, [(_c.object = _d.sent(),
+                                _c)]);
+                        _d.label = 3;
+                    case 3: return [3 /*break*/, 5];
+                    case 4:
+                        err_1 = _d.sent();
+                        console.log("getting object failed...");
+                        return [3 /*break*/, 5];
+                    case 5: return [2 /*return*/];
+                }
             });
-        }
+        });
     };
     PeerHandler.prototype.onIHaveObjectMessage = function (msg) {
-        if (this.objectManager.objectExists(msg.objectid)) {
-            this.connIO.writeToSocket({
-                type: "getobject",
-                objectid: msg.objectid
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, this.objectManager.objectExists(msg.objectid)];
+                    case 1:
+                        if (!(_a.sent())) {
+                            this.connIO.writeToSocket({
+                                type: "getobject",
+                                objectid: msg.objectid
+                            });
+                        }
+                        return [2 /*return*/];
+                }
             });
-        }
+        });
     };
     PeerHandler.prototype.onObjectMessage = function (msg) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, this.objectManager.validateObject(msg)];
+                    case 0:
+                        logger_1.logger.debug("On object message:", msg);
+                        return [4 /*yield*/, this.objectManager.validateObject(msg.object)];
                     case 1:
-                        if (!_a.sent()) return [3 /*break*/, 3];
-                        // TODO: check if we should only gossip new messages
-                        return [4 /*yield*/, this.objectManager.storeObject(msg.object)];
+                        if (!_a.sent()) return [3 /*break*/, 5];
+                        return [4 /*yield*/, this.objectManager.objectExists((0, objectmanager_1.getObjectID)(msg.object))];
                     case 2:
-                        // TODO: check if we should only gossip new messages
+                        if (!!(_a.sent())) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.objectManager.storeObject(msg.object)];
+                    case 3:
                         _a.sent();
                         this.peerManager.broadcastMessage({
                             type: "ihaveobject",
                             objectid: (0, objectmanager_1.getObjectID)(msg.object)
                         });
-                        return [3 /*break*/, 4];
-                    case 3:
-                        this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
                         _a.label = 4;
-                    case 4: return [2 /*return*/];
+                    case 4: return [3 /*break*/, 6];
+                    case 5:
+                        this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
+                        _a.label = 6;
+                    case 6: return [2 /*return*/];
                 }
             });
         });
