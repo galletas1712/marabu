@@ -72,11 +72,6 @@ const runNode = async () => {
     client.connect(port, host);
     client.on("connect", () => handleConnection(client, peerManager, objectManager));
     client.on("error", (err) => logger.warn(`${err}`));
-    client.on("close", () => {
-      setTimeout(() => {
-        client.connect(port, host);
-      }, 1000);
-    });
   }
 };
 
