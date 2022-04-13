@@ -150,8 +150,47 @@ async function test4(){
 
 }
 
+
+async function test5(){
+
+    const sk1 = ed.utils.randomPrivateKey();
+    const sk2 = ed.utils.randomPrivateKey();
+    const sk3 = ed.utils.randomPrivateKey();
+    const pk1 = Buffer.from(await ed.getPublicKey(sk1)).toString("hex");
+    const pk2 = Buffer.from(await ed.getPublicKey(sk2)).toString("hex");
+    const pk3 = Buffer.from(await ed.getPublicKey(sk3)).toString("hex");
+    
+    console.log("Test 5 Sends valid transactions and expects them to be gossipped");
+    console.log("Expecting: Transactions gossipped");
+
+    let randVal = Math.round(Math.random() * 10000000);
+    let txn = { "type": "transaction", "height": 128, "outputs": [ { "pubkey": pk1, "value": randVal } ] };
+    let txnid = hashObject(txn);
+
+    let txnObjMsg = '{ "type": "object", "object":' + JSON.stringify(txn) + '}\n';
+
+    let getObjMsg = createGetObjMsg(txn);
+
+    let txn2 = { "type": "transaction", "inputs": [ { "outpoint": { "txid": txnid, "index": 0 }, "sig": null } ], "outputs": [ { "pubkey": pk1, "value": randVal } ] };
+
+    const encoder = new TextEncoder();
+    const encodedTx = Uint8Array.from(encoder.encode(canonicalize(txn2)));
+    const sig1 = Buffer.from(await ed.sign(encodedTx, await ed.getPublicKey(sk1))).toString("hex");
+    txn2.inputs[0].sig = sig1;
+
+    let txn2id = hashObject(txn2);
+
+    let txn2ObjMsg = '{ "type": "object", "object":' + JSON.stringify(txn2) + '}\n';
+
+    let getObj2Msg = createGetObjMsg(txn2);
+    
+    console.log("txn1id is", txnid, "txn2id is", txn2id);
+    createNewClient([helloMsg]);
+    createNewClient([helloMsg, txnObjMsg]);
+}
+
 const testsArray = [
-    test1, test2, test4
+    test1, test2, test4, test5
 ];
 
 async function tests() {
