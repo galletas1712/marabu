@@ -1,6 +1,11 @@
 import {getObjectID, ObjectManager} from './src/objectmanager';
 import * as net from "net";
 import Level from 'level-ts';
+import { randomBytes } from 'crypto';
+import { canonicalize } from "json-canonicalize";
+import * as ed from "@noble/ed25519";
+
+
 
 
 const args = process.argv.slice(2);
@@ -31,9 +36,10 @@ function createNewClient(messages) {
     console.log(`Received message:`, msg.toString());
   });
 
-  client.on("connect", () => {
+  client.on("connect", async () => {
     for (let message of messages) {
       client.write(message);
+      await timeout(2000);
     }
   });
   client.connect(serverPort, serverHostname);
@@ -55,18 +61,45 @@ function createGetObjMsg(txn){
 }
 
 async function test1() {
-    console.log("Test 1: Sends a valid transaction object and asks for it back");
-    console.log("Expecting: Transaction that was sent");
 
-    let txn = { "type": "transaction", "height": 128, "outputs": [ { "pubkey": "077a2683d776a71139fd4db4d00c16703ba0753fc8bdc4bd6fc56614e659cde3", "value": 50000000000 } ] };
-    //let txn = { "type": "transaction", "inputs": [ { "outpoint": { "txid": "f71408bf847d7dd15824574a7cd4afdfaaa2866286910675cd3fc371507aa196", "index": 0 }, "sig": "3869a9ea9e7ed926a7c8b30fb71f6ed151a132b03fd5dae764f015c98271000e7da322dbcfc97af7931c23c0fae060e102446ccff0f54ec00f9978f3a69a6f0f" } ], "outputs": [ { "pubkey": "077a2683d776a71139fd4db4d00c16703ba0753fc8bdc4bd6fc56614e659cde3", "value": 5100000000 } ] };
+    const sk1 = ed.utils.randomPrivateKey();
+    const sk2 = ed.utils.randomPrivateKey();
+    const sk3 = ed.utils.randomPrivateKey();
+    const pk1 = Buffer.from(await ed.getPublicKey(sk1)).toString("hex");
+    const pk2 = Buffer.from(await ed.getPublicKey(sk2)).toString("hex");
+    const pk3 = Buffer.from(await ed.getPublicKey(sk3)).toString("hex");
+    
+    console.log("Test 1: Sends a valid coinbase transaction object and asks for it back; sends a valid non-coinbase txn and asks for it back");
+    console.log("Expecting: Transactions that were sent");
+
+    let randVal = Math.random() * 10000000;
+    let txn = { "type": "transaction", "height": 128, "outputs": [ { "pubkey": "077a2683d776a71139fd4db4d00c16703ba0753fc8bdc4bd6fc56614e659cde3", "value": randVal } ] };
     let txnid = hashObject(txn);
 
     let txnObjMsg = '{ "type": "object", "object":' + JSON.stringify(txn) + '}\n';
 
     let getObjMsg = createGetObjMsg(txn);
 
-    createNewClient([helloMsg, txnObjMsg, getObjMsg]);
+    let txn2 = { "type": "transaction", "inputs": [ { "outpoint": { "txid": txnid, "index": 0 }, "sig": null } ], "outputs": [ { "pubkey": pk1, "value": randVal } ] };
+
+    const encoder = new TextEncoder();
+    const encodedTx = Uint8Array.from(encoder.encode(canonicalize(txn2)));
+    const sig1 = Buffer.from(await ed.sign(encodedTx, await ed.getPublicKey(sk1))).toString("hex");
+    txn2.inputs[0].sig = sig1;
+
+    let txn2id = hashObject(txn2);
+
+    let txn2ObjMsg = '{ "type": "object", "object":' + JSON.stringify(txn2) + '}\n';
+
+    let getObj2Msg = createGetObjMsg(txn2);
+
+    createNewClient([helloMsg, txnObjMsg, getObjMsg, txn2ObjMsg, getObj2Msg]);
+}
+
+    //let txn = 
+
+async function test2(){
+
 }
 
 const testsArray = [
