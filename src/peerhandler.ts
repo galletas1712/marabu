@@ -129,9 +129,11 @@ export class PeerHandler {
   }
 
   async onObjectMessage(msg: ObjectMsg) {
-    if (await this.objectManager.validateObject(msg)) {
+    if (await this.objectManager.validateObject(msg.object)) {
       // TODO: check if we should only gossip new messages
-      await this.objectManager.storeObject(msg.object);
+      if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
+        await this.objectManager.storeObject(msg.object);
+      }
       this.peerManager.broadcastMessage({
         type: "ihaveobject",
         objectid: getObjectID(msg.object),
