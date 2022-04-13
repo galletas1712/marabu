@@ -13,7 +13,7 @@ import {
   GetObjectMsg,
   ObjectMsg,
 } from "./types/messages";
-import { ObjectManager } from "./objectmanager";
+import { getObjectID, ObjectManager } from "./objectmanager";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
 
@@ -130,17 +130,12 @@ export class PeerHandler {
 
   async onObjectMessage(msg: ObjectMsg) {
     if (await this.objectManager.validateObject(msg)) {
-      if (
-        !(await this.objectManager.objectExists(
-          this.objectManager.getObjectID(msg.object)
-        ))
-      ) {
-        await this.objectManager.storeObject(msg.object);
-        this.peerManager.broadcastMessage({
-          type: "ihaveobject",
-          objectid: this.objectManager.getObjectID(msg.object),
-        });
-      }
+      // TODO: check if we should only gossip new messages
+      await this.objectManager.storeObject(msg.object);
+      this.peerManager.broadcastMessage({
+        type: "ihaveobject",
+        objectid: getObjectID(msg.object),
+      });
     } else {
       this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
     }

@@ -1,6 +1,6 @@
 import { logger } from "./logger";
 import isValidHostname from "is-valid-hostname";
-import Level from "level-ts";
+import level from "level-ts";
 import { BOOTSTRAP_PEERS } from "./config";
 import { Message } from "./types/messages";
 import { ConnectedSocketIO } from "./socketio";
@@ -8,9 +8,9 @@ import { ConnectedSocketIO } from "./socketio";
 export class PeerManager {
   knownPeers: Set<string> = new Set();
   connectedPeers: Map<string, ConnectedSocketIO> = new Map();
-  db: Level;
+  db: level;
 
-  constructor(db: Level) {
+  constructor(db: level) {
     this.db = db;
   }
 
