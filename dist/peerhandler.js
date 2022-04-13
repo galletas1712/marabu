@@ -64,6 +64,7 @@ var semver = __importStar(require("semver"));
 var config_1 = require("./config");
 var logger_1 = require("./logger");
 var messages_1 = require("./types/messages");
+var objectmanager_1 = require("./objectmanager");
 var PeerHandler = /** @class */ (function () {
     function PeerHandler(connIO, peerManager, objectManager, selfHostWithPort) {
         this.connIO = connIO;
@@ -146,19 +147,46 @@ var PeerHandler = /** @class */ (function () {
     };
     PeerHandler.prototype.onGetObjectMessage = function (msg) {
         if (this.objectManager.objectExists(msg.objectid)) {
-            this.connIO.writeToSocket({ type: "object", object: this.objectManager.getObject(msg.objectid) });
+            this.connIO.writeToSocket({
+                type: "object",
+                object: this.objectManager.getObject(msg.objectid)
+            });
         }
     };
     PeerHandler.prototype.onIHaveObjectMessage = function (msg) {
         if (this.objectManager.objectExists(msg.objectid)) {
-            this.connIO.writeToSocket({ type: "getobject", objectid: msg.objectid });
+            this.connIO.writeToSocket({
+                type: "getobject",
+                objectid: msg.objectid
+            });
         }
     };
     PeerHandler.prototype.onObjectMessage = function (msg) {
-        if (!this.objectManager.objectExists(this.objectManager.getObjectID(msg.object))) {
-            this.objectManager.storeObject(msg.object);
-            this.peerManager.broadcastMessage({ type: "ihaveobject", objectid: this.objectManager.getObjectID(msg.object) });
-        }
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, this.objectManager.validateObject(msg)];
+                    case 1:
+                        if (!_a.sent()) return [3 /*break*/, 5];
+                        return [4 /*yield*/, this.objectManager.objectExists((0, objectmanager_1.getObjectID)(msg.object))];
+                    case 2:
+                        if (!!(_a.sent())) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.objectManager.storeObject(msg.object)];
+                    case 3:
+                        _a.sent();
+                        this.peerManager.broadcastMessage({
+                            type: "ihaveobject",
+                            objectid: (0, objectmanager_1.getObjectID)(msg.object)
+                        });
+                        _a.label = 4;
+                    case 4: return [3 /*break*/, 6];
+                    case 5:
+                        this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
+                        _a.label = 6;
+                    case 6: return [2 /*return*/];
+                }
+            });
+        });
     };
     PeerHandler.prototype.echo = function (msg) {
         logger_1.logger.debug("Received ".concat(msg.type, " message but not doing anything."));

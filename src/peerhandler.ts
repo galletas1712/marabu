@@ -13,7 +13,7 @@ import {
   GetObjectMsg,
   ObjectMsg,
 } from "./types/messages";
-import { ObjectManager } from "./objectmanager";
+import { getObjectID, ObjectManager } from "./objectmanager";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
 
@@ -126,13 +126,13 @@ export class PeerHandler {
     if (await this.objectManager.validateObject(msg)) {
       if (
         !(await this.objectManager.objectExists(
-          this.objectManager.getObjectID(msg.object)
+          getObjectID(msg.object)
         ))
       ) {
         await this.objectManager.storeObject(msg.object);
         this.peerManager.broadcastMessage({
           type: "ihaveobject",
-          objectid: this.objectManager.getObjectID(msg.object),
+          objectid: getObjectID(msg.object),
         });
       }
     } else {
