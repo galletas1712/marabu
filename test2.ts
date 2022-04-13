@@ -58,13 +58,14 @@ async function test1() {
     console.log("Test 1: Sends a valid transaction object and asks for it back");
     console.log("Expecting: Transaction that was sent");
 
-    let txn = { "type": "transaction", "inputs": [ { "outpoint": { "txid": "f71408bf847d7dd15824574a7cd4afdfaaa2866286910675cd3fc371507aa196", "index": 0 }, "sig": "3869a9ea9e7ed926a7c8b30fb71f6ed151a132b03fd5dae764f015c98271000e7da322dbcfc97af7931c23c0fae060e102446ccff0f54ec00f9978f3a69a6f0f" } ], "outputs": [ { "pubkey": "077a2683d776a71139fd4db4d00c16703ba0753fc8bdc4bd6fc56614e659cde3", "value": 5100000000 } ] };
+    let txn = { "type": "transaction", "height": 128, "outputs": [ { "pubkey": "077a2683d776a71139fd4db4d00c16703ba0753fc8bdc4bd6fc56614e659cde3", "value": 50000000000 } ] };
+    //let txn = { "type": "transaction", "inputs": [ { "outpoint": { "txid": "f71408bf847d7dd15824574a7cd4afdfaaa2866286910675cd3fc371507aa196", "index": 0 }, "sig": "3869a9ea9e7ed926a7c8b30fb71f6ed151a132b03fd5dae764f015c98271000e7da322dbcfc97af7931c23c0fae060e102446ccff0f54ec00f9978f3a69a6f0f" } ], "outputs": [ { "pubkey": "077a2683d776a71139fd4db4d00c16703ba0753fc8bdc4bd6fc56614e659cde3", "value": 5100000000 } ] };
     let txnid = hashObject(txn);
 
     let txnObjMsg = '{ "type": "object", "object":' + JSON.stringify(txn) + '}\n';
 
     let getObjMsg = createGetObjMsg(txn);
-    
+
     createNewClient([helloMsg, txnObjMsg, getObjMsg]);
 }
 

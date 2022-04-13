@@ -110,17 +110,17 @@ export class PeerHandler {
     msg.peers.forEach((peer: string) => this.peerManager.peerDiscovered(peer));
   }
 
-  onGetObjectMessage(msg: GetObjectMsg) {
+  async onGetObjectMessage(msg: GetObjectMsg) {
     if (this.objectManager.objectExists(msg.objectid)) {
       this.connIO.writeToSocket({
         type: "object",
-        object: this.objectManager.getObject(msg.objectid),
+        object: await this.objectManager.getObject(msg.objectid),
       });
     }
   }
 
   onIHaveObjectMessage(msg: IHaveObjectMsg) {
-    if (this.objectManager.objectExists(msg.objectid)) {
+    if (!this.objectManager.objectExists(msg.objectid)) {
       this.connIO.writeToSocket({
         type: "getobject",
         objectid: msg.objectid,
