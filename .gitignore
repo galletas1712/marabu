@@ -10,3 +10,8 @@ testDB/LOG.old
 testDB/LOG
 testDB/CURRENT
 *.log
+*.js
+*.log
+testDB/000033.log
+testDB
+*.old
