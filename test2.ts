@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { canonicalize } from "json-canonicalize";
 import * as ed from "@noble/ed25519";
 import { Console } from "console";
+import { CoinbaseTransaction, CoinbaseTransactionRecord, NonCoinbaseTransactionRecord } from "./src/types/transactions";
 
 const args = process.argv.slice(2);
 const serverHostname = args[0];
@@ -48,6 +49,7 @@ function createNewClient(messages) {
 
   client.on("connect", async () => {
     for (let message of messages) {
+      console.log(`Client ${clientID} sending:`, message);
       client.write(message);
       await timeout(2000);
     }
@@ -101,9 +103,7 @@ async function test1() {
 
   const encoder = new TextEncoder();
   const encodedTx = Uint8Array.from(encoder.encode(canonicalize(txn2)));
-  const sig1 = Buffer.from(
-    await ed.sign(encodedTx, sk1)
-  ).toString("hex");
+  const sig1 = Buffer.from(await ed.sign(encodedTx, sk1)).toString("hex");
   txn2.inputs[0].sig = sig1;
 
   let txn2id = hashObject(txn2);
@@ -149,9 +149,7 @@ async function test2() {
 
   const encoder = new TextEncoder();
   const encodedTx = Uint8Array.from(encoder.encode(canonicalize(txn2)));
-  const sig1 = Buffer.from(
-    await ed.sign(encodedTx, sk1)
-  ).toString("hex");
+  const sig1 = Buffer.from(await ed.sign(encodedTx, sk1)).toString("hex");
   txn2.inputs[0].sig = sig1;
 
   let txn2id = hashObject(txn2);
@@ -207,9 +205,7 @@ async function test5() {
 
   const encoder = new TextEncoder();
   const encodedTx = Uint8Array.from(encoder.encode(canonicalize(txn2)));
-  const sig1 = Buffer.from(
-    await ed.sign(encodedTx, sk1)
-  ).toString("hex");
+  const sig1 = Buffer.from(await ed.sign(encodedTx, sk1)).toString("hex");
   txn2.inputs[0].sig = sig1;
 
   let txn2id = hashObject(txn2);
@@ -224,9 +220,49 @@ async function test5() {
   createNewClient([helloMsg, txnObjMsg]);
 }
 
-const testsArray = [
-  test1, test2, test4, test5
-];
+async function test6() {
+  const coinbaseTxMsg = {
+    type: "object",
+    object: {
+      type: "transaction",
+      height: 0,
+      outputs: [
+        {
+          pubkey:
+            "3e862a87a41ac611464b404ed472cf8c7e0c79e859a8a8bb444dbb08c118396d",
+          value: 50000000000,
+        },
+      ],
+    },
+  };
+  const validTxMsg = {
+    object: {
+      inputs: [
+        {
+          outpoint: {
+            index: 0,
+            txid: "af2c141e158fb5dcc7aac86dea676bc39c6572d4853239172031d6af7b7757cc",
+          },
+          sig: "bd620a84f2ee6794b0e60ca4b3ffc4564d87ab01e29fb7d09d49898348df6d99fcb1a4c644a66e86ebaf94c97cb15ea6f996ceaa5ef2d566ebf2e4671f8a580d",
+        },
+      ],
+      outputs: [
+        {
+          pubkey:
+            "3e862a87a41ac611464b404ed472cf8c7e0c79e859a8a8bb444dbb08c118396d",
+          value: 10,
+        },
+      ],
+      type: "transaction",
+    },
+    type: "object",
+  };
+  CoinbaseTransactionRecord.check(coinbaseTxMsg.object);
+  NonCoinbaseTransactionRecord.check(validTxMsg.object);
+  createNewClient([helloMsg, JSON.stringify(coinbaseTxMsg) + "\n", JSON.stringify(validTxMsg) + "\n"]);
+}
+
+const testsArray = [test1, test2, test4, test5, test6];
 
 async function tests() {
   console.log("------------------------------------------------");

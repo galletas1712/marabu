@@ -145,7 +145,7 @@ export class ObjectManager {
         }
 
         // Check conservation of UTXOs
-        if (sumInputs != sumOutputs) {
+        if (sumInputs < sumOutputs) {
           return false;
         }
 

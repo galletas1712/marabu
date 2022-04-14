@@ -87,7 +87,6 @@ var PeerManager = /** @class */ (function () {
     }
     PeerManager.prototype.broadcastMessage = function (msg) {
         var e_1, _a;
-        console.log(this.connectedPeers.size);
         try {
             for (var _b = __values(this.connectedPeers.values()), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var peerSocket = _c.value;

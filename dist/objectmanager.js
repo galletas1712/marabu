@@ -179,6 +179,7 @@ var ObjectManager = /** @class */ (function () {
                     case 3:
                         // Check outpoint
                         if (!(_g.sent())) {
+                            console.log(1);
                             return [2 /*return*/, false];
                         }
                         return [4 /*yield*/, this.getObject(input.outpoint.txid)];
@@ -186,9 +187,11 @@ var ObjectManager = /** @class */ (function () {
                         outpointTx = _g.sent();
                         if (input.outpoint.index >= outpointTx.outputs.length) {
                             return [2 /*return*/, false];
+                            console.log(2);
                         }
                         // Check signature
                         if (!(0, exports.isValidHex)(input.sig, 128)) {
+                            console.log(3);
                             return [2 /*return*/, false];
                         }
                         pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
@@ -199,6 +202,7 @@ var ObjectManager = /** @class */ (function () {
                     case 5:
                         sigVerified = _g.sent();
                         if (!sigVerified) {
+                            console.log(4);
                             return [2 /*return*/, false];
                         }
                         sumInputs += outpointTx.outputs[input.outpoint.index].value;
@@ -223,6 +227,7 @@ var ObjectManager = /** @class */ (function () {
                             for (_c = __values(obj.outputs), _d = _c.next(); !_d.done; _d = _c.next()) {
                                 output = _d.value;
                                 if (!(0, exports.isValidHex)(output.pubkey, 64) || output.value < 0) {
+                                    console.log(5);
                                     return [2 /*return*/, false];
                                 }
                                 sumOutputs += output.value;
@@ -236,7 +241,10 @@ var ObjectManager = /** @class */ (function () {
                             finally { if (e_2) throw e_2.error; }
                         }
                         // Check conservation of UTXOs
-                        if (sumInputs != sumOutputs) {
+                        if (sumInputs < sumOutputs) {
+                            console.log(sumInputs);
+                            console.log(sumOutputs);
+                            console.log(6);
                             return [2 /*return*/, false];
                         }
                         return [2 /*return*/, true];
