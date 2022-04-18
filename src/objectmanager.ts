@@ -159,7 +159,7 @@ export class ObjectManager {
       //not a valid transaction format; need to return error to node that sent it to us
       return false;
     } catch (err) {
-      console.log("Validation failed" + err);
+      logger.warn("Validation failed -", err);
       return false;
     }
   }
