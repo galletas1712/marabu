@@ -9,7 +9,11 @@ import {
   Message,
   MessageRecord,
   PeersMsg,
-} from "./messages";
+  IHaveObjectMsg,
+  GetObjectMsg,
+  ObjectMsg,
+} from "./types/messages";
+import { getObjectID, ObjectManager } from "./objectmanager";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
 
@@ -17,16 +21,19 @@ export class PeerHandler {
   connIO: ConnectedSocketIO;
   finishedHandshake: boolean;
   peerManager: PeerManager;
+  objectManager: ObjectManager;
   selfHostWithPort: string;
 
   constructor(
     connIO: ConnectedSocketIO,
     peerManager: PeerManager,
+    objectManager: ObjectManager,
     selfHostWithPort: string
   ) {
     this.connIO = connIO;
     this.finishedHandshake = false;
     this.peerManager = peerManager;
+    this.objectManager = objectManager;
     this.selfHostWithPort = selfHostWithPort;
   }
 
@@ -72,6 +79,12 @@ export class PeerHandler {
       this.onGetPeersMessage(msg);
     } else if (msg.type == "peers") {
       this.onPeersMessage(msg);
+    } else if (msg.type == "object"){
+      this.onObjectMessage(msg);
+    } else if (msg.type == "ihaveobject"){
+      this.onIHaveObjectMessage(msg);
+    } else if (msg.type == "getobject"){
+      this.onGetObjectMessage(msg);
     } else {
       this.echo(msg);
     }
@@ -95,6 +108,43 @@ export class PeerHandler {
 
   async onPeersMessage(msg: PeersMsg) {
     msg.peers.forEach((peer: string) => this.peerManager.peerDiscovered(peer));
+  }
+
+  async onGetObjectMessage(msg: GetObjectMsg) {
+    try{
+      if (await this.objectManager.objectExists(msg.objectid)) {
+        this.connIO.writeToSocket({
+          type: "object",
+          object: await this.objectManager.getObject(msg.objectid),
+        });
+      }
+    } catch (err){
+      logger.debug("getting object failed...");
+    }
+  }
+
+  async onIHaveObjectMessage(msg: IHaveObjectMsg) {
+    if (!(await this.objectManager.objectExists(msg.objectid))) {
+      this.connIO.writeToSocket({
+        type: "getobject",
+        objectid: msg.objectid,
+      } as GetObjectMsg);
+    }
+  }
+
+  async onObjectMessage(msg: ObjectMsg) {
+    logger.debug("On object message:", msg);
+    if (await this.objectManager.validateObject(msg.object)) {
+      if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
+        this.objectManager.storeObject(msg.object);
+        this.peerManager.broadcastMessage({
+          type: "ihaveobject",
+          objectid: getObjectID(msg.object),
+        });
+      }
+    } else {
+      this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
+    }
   }
 
   echo(msg: Message) {

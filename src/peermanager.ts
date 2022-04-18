@@ -1,14 +1,23 @@
 import { logger } from "./logger";
 import isValidHostname from "is-valid-hostname";
-import Level from "level-ts";
+import level from "level-ts";
 import { BOOTSTRAP_PEERS } from "./config";
+import { Message } from "./types/messages";
+import { ConnectedSocketIO } from "./socketio";
 
 export class PeerManager {
   knownPeers: Set<string> = new Set();
-  db: Level;
+  connectedPeers: Map<string, ConnectedSocketIO> = new Map();
+  db: level;
 
-  constructor(db: Level) {
+  constructor(db: level) {
     this.db = db;
+  }
+
+  broadcastMessage(msg: Message) {
+    for (const peerSocket of this.connectedPeers.values()) {
+      peerSocket.writeToSocket(msg);
+    }
   }
 
   async load() {
@@ -52,5 +61,15 @@ export class PeerManager {
 
     this.knownPeers.add(peer);
     this.store(); // intentionally delayed await
+  }
+
+  peerConnected(peer: string, socketIOObj: ConnectedSocketIO) {
+    logger.debug(`Peer ${peer} connected`);
+    this.connectedPeers.set(peer, socketIOObj);
+  }
+
+  peerDisconnected(peer: string) {
+    logger.debug(`Peer ${peer} disconnected`);
+    this.connectedPeers.delete(peer);
   }
 }

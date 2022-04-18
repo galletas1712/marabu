@@ -5,36 +5,47 @@ import { PeerHandler } from "./peerhandler";
 import { BOOTSTRAP_PEERS } from "./config";
 import { PeerManager } from "./peermanager";
 import { logger } from "./logger";
+import { ObjectManager } from "./objectmanager";
 
 const args = process.argv.slice(2);
 const peersDBPath = args[0];
-const serverHostname = args[1];
-const serverPort = args[2];
+const objectDBPath = args[1];
+const serverHostname = args[2];
+const serverPort = args[3];
 
 const handleConnection = async (
   socket: net.Socket,
-  peerManager: PeerManager
+  peerManager: PeerManager,
+  objectManager: ObjectManager
 ) => {
+  const peerAddressObj = socket.address() as net.AddressInfo;
+  const peerID = Math.floor(Math.random() * 1e9).toString();
+
   const connIO = new ConnectedSocketIO(socket);
   const peerHandler = new PeerHandler(
     connIO,
     peerManager,
+    objectManager,
     serverHostname + ":" + serverPort
   );
   connIO.onConnect();
+  peerManager.peerConnected(peerID, connIO);
   socket.on("data", (data: string) => connIO.onData(data, peerHandler));
+  socket.on("close", () => peerManager.peerDisconnected(peerID));
 };
 
 const runNode = async () => {
-  const db = new level(peersDBPath);
-  const peerManager = new PeerManager(db);
+  const peersDB = new level(peersDBPath);
+  const objectDB = new level(objectDBPath);
+  const peerManager = new PeerManager(peersDB);
   await peerManager.load();
+  const objectManager = new ObjectManager(objectDB);
 
   // Run Server
   logger.debug("Server starting");
   const server = net.createServer((socket: net.Socket) => {
     socket.on("error", (err) => logger.warn(`${err}`));
-    handleConnection(socket, peerManager);
+    handleConnection(socket, peerManager, objectManager);
   });
   server.listen(serverPort);
 
@@ -59,13 +70,8 @@ const runNode = async () => {
 
     const client = new net.Socket();
     client.connect(port, host);
-    client.on("connect", () => handleConnection(client, peerManager));
+    client.on("connect", () => handleConnection(client, peerManager, objectManager));
     client.on("error", (err) => logger.warn(`${err}`));
-    client.on("close", () => {
-      setTimeout(() => {
-        client.connect(port, host);
-      }, 1000);
-    });
   }
 };
 
