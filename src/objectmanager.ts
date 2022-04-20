@@ -214,6 +214,7 @@ export class ObjectManager {
       const tx = await this.getObject(block.txids[i]);
       if (NonCoinbaseTransactionRecord.guard(tx)) {
         if (!await this.validateNonCoinbaseTransaction(tx)) {
+          logger.warn("Found invalid non coinbase transaction in block");
           return false;
         }
         
@@ -227,15 +228,18 @@ export class ObjectManager {
         }
       } else if (CoinbaseTransactionRecord.guard(tx)) {
         if (i != 0) {
+          logger.warn("Coinbase transaction appears outside of index 0");
           return false;
         }
       } else {
+        logger.warn("Found invalid transaction in block");
         return false;
       }
     }
     
     // Conservation of coinbase transaction
     if (coinbaseTx !== undefined && coinbaseTx.outputs[0].value > fees + BLOCK_REWARD) {
+      logger.warn("Coinbase transaction does not satify conservation");
       return false;
     }
 
@@ -243,6 +247,7 @@ export class ObjectManager {
 
     //block is invalid if we don't have the previous UTXO, per piazza post
     if(!(await this.UTXOExists(block.previd))){
+      logger.warn("Could not find UTXO set corresponding to previd in database");
       return false;
     }
 
@@ -255,9 +260,9 @@ export class ObjectManager {
       if (NonCoinbaseTransactionRecord.guard(tx)) {
         //verifying that all outpoints are unspent
         for(const input of tx.inputs){
-          const outpoint = input.outpoint;
           // TODO: test if equality works
           if (!currentUTXOSet.has(input.outpoint)) {
+            logger.warn("Transaction refers to UTXO not in previd's set");
             return false;
           }
             //remove outpoint from UTXO set
