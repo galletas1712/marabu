@@ -217,6 +217,16 @@ export class ObjectManager {
           logger.warn("Found invalid non coinbase transaction in block");
           return false;
         }
+
+        // Check if coinbase transaction is used in the same block
+        if (coinbaseTx !== undefined) {
+          for (const input of tx.inputs) {
+            if (input.outpoint.txid == getObjectID(coinbaseTx)) {
+              logger.warn("Coinbase transaction used in same block");
+              return false;
+            }
+          }
+        }
         
         // Accumulate fees
         for (const input of tx.inputs) {
@@ -262,7 +272,7 @@ export class ObjectManager {
         for(const input of tx.inputs){
           // TODO: test if equality works
           if (!currentUTXOSet.has(input.outpoint)) {
-            logger.warn("Transaction refers to UTXO not in previd's set");
+            logger.warn("Transaction refers to UTXO not in set/double spend");
             return false;
           }
             //remove outpoint from UTXO set
