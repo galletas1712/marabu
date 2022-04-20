@@ -19,7 +19,6 @@ const handleConnection = async (
   peerManager: PeerManager,
   objectManager: ObjectManager
 ) => {
-  const peerAddressObj = socket.address() as net.AddressInfo;
   const peerID = Math.floor(Math.random() * 1e9).toString();
 
   const connIO = new ConnectedSocketIO(socket);

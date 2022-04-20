@@ -2,7 +2,7 @@ import { canonicalize } from "json-canonicalize";
 import level from "level-ts";
 import sha256 from "fast-sha256";
 import * as ed from "@noble/ed25519";
-import { EventDispatcher, SignalDispatcher } from "strongly-typed-events";
+import { SignalDispatcher } from "strongly-typed-events";
 import { logger } from "./logger";
 import {
   Block,
@@ -18,7 +18,7 @@ import {
   TxOutpoint,
 } from "./types/transactions";
 import { hexTou8 } from "./util";
-import { BLOCK_REWARD, TARGET, TIMEOUT } from "./config";
+import { BLOCK_REWARD, GENESIS, GENESIS_BLOCKID, TARGET, TIMEOUT } from "./config";
 import { PeerManager } from "./peermanager";
 import { GetObjectMsg } from "./types/messages";
 
@@ -69,6 +69,12 @@ export class ObjectManager {
     this.cache = new Map();
     this.cacheUTXO = new Map();
     this.peerManager = peerManager;
+  }
+
+  async initWithGenesisBlock() {
+    if (!await this.objectExists(GENESIS_BLOCKID)) {
+      await this.storeObject(GENESIS);
+    }
   }
 
   async UTXOExists(blockid: string): Promise<boolean> {
