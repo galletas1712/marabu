@@ -2,7 +2,7 @@ import { canonicalize } from "json-canonicalize";
 import level from "level-ts";
 import sha256 from "fast-sha256";
 import * as ed from "@noble/ed25519";
-import { SignalDispatcher } from "strongly-typed-events";
+import { SimpleEventDispatcher } from "strongly-typed-events";
 import { logger } from "./logger";
 import {
   Block,
@@ -14,6 +14,7 @@ import {
   NulledNonCoinbaseTransaction,
   NulledTxInput,
   Transaction,
+  TransactionRecord,
   TxInput,
   TxOutpoint,
 } from "./types/transactions";
@@ -61,7 +62,7 @@ export class ObjectManager {
   private peerManager: PeerManager;
   private cache: Map<string, Object> = new Map();
   private cacheUTXO: Map<string, Set<TxOutpoint> > = new Map();
-  private onReceiveObject: SignalDispatcher = new SignalDispatcher();
+  private onReceiveObject: SimpleEventDispatcher<Transaction> = new SimpleEventDispatcher<Transaction>();
 
   constructor(db: level, dbUTXO: level, peerManager: PeerManager) {
     this.db = db;
@@ -111,7 +112,9 @@ export class ObjectManager {
     this.cache.set(id, obj);
     await this.db.put(id, obj);
     this.cache.delete(id);
-    await this.onReceiveObject.dispatch();
+    if (TransactionRecord.guard(obj)) {
+      await this.onReceiveObject.dispatch(obj);
+    }
   }
 
   async validateObject(obj: Object): Promise<boolean> {
@@ -195,9 +198,12 @@ export class ObjectManager {
       if (!await this.objectExists(txid)) {
         this.peerManager.broadcastMessage({type: "getobject", objectid: txid} as GetObjectMsg);
         fetchTxJobPromises.push(new Promise<Transaction>((resolve, reject) => {
-          this.onReceiveObject.subscribe(async () => {
+          this.onReceiveObject.subscribe(async (tx: Transaction) => {
             // Can simply use objectExists because we validate the transaction before storage
-            if (await this.objectExists(txid)) {
+            if (getObjectID(tx) === txid) {
+              if (!await this.objectExists(txid)) {
+                logger.warn("OBJECT DOES NOT EXIST IN DATABASE YET!!!");
+              }
               return resolve(await this.getObject(txid) as Transaction);
             }
           });
