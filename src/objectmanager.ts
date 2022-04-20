@@ -2,19 +2,24 @@ import { canonicalize } from "json-canonicalize";
 import level from "level-ts";
 import sha256 from "fast-sha256";
 import * as ed from "@noble/ed25519";
+import { EventDispatcher, SignalDispatcher } from "strongly-typed-events";
 import { logger } from "./logger";
 import {
+  Block,
   BlockRecord,
+  CoinbaseTransaction,
   CoinbaseTransactionRecord,
   NonCoinbaseTransaction,
   NonCoinbaseTransactionRecord,
   NulledNonCoinbaseTransaction,
   NulledTxInput,
   Transaction,
-  TransactionRecord,
   TxInput,
 } from "./types/transactions";
 import { hexTou8 } from "./util";
+import { TARGET, TIMEOUT } from "./config";
+import { PeerManager } from "./peermanager";
+import { GetObjectMsg } from "./types/messages";
 
 export const getObjectID = (obj: Object): string => {
   const encoder = new TextEncoder();
@@ -49,32 +54,16 @@ export const verifySig = async (
   return ed.verify(sig_u8, msg_u8, pubkey_u8);
 };
 
-export const isValidHex = (
-  hexString: string,
-  expectedLength: number
-): boolean => {
-  for (let i = 0; i < hexString.length; i++) {
-    if (
-      !(
-        (hexString[i] >= "0" && hexString[i] <= "9") ||
-        (hexString[i] >= "a" && hexString[i] <= "f")
-      )
-    ) {
-      return false;
-    }
-  }
-  return (
-    hexString.length === expectedLength && hexString.toLowerCase() === hexString
-  );
-};
-
 export class ObjectManager {
   private db: level;
   private cache: Map<string, Object>;
+  private peerManager: PeerManager;
+  private onReceiveObject: SignalDispatcher;
 
-  constructor(db: level) {
+  constructor(db: level, peerManager: PeerManager) {
     this.db = db;
     this.cache = new Map();
+    this.peerManager = peerManager;
   }
 
   async objectExists(objID: string) {
@@ -89,78 +78,119 @@ export class ObjectManager {
   }
 
   async storeObject(obj: Object) {
-    this.cache.set(getObjectID(obj), obj);
-    await this.db.put(getObjectID(obj), obj);
-    this.cache.delete(getObjectID(obj));
+    const id = getObjectID(obj);
+    this.cache.set(id, obj);
+    await this.db.put(id, obj);
+    this.cache.delete(id);
+    await this.onReceiveObject.dispatch();
   }
 
   async validateObject(obj: Object): Promise<boolean> {
     try {
       if (NonCoinbaseTransactionRecord.guard(obj)) {
-        const nulledTx = genSignatureNulledTransaction(obj);
-
-        let sumInputs = 0;
-        let sumOutputs = 0;
-
-        // Check inputs
-        for (const input of obj.inputs) {
-          // Check outpoint
-          if (!(await this.objectExists(input.outpoint.txid))) {
-            return false;
-          }
-          const outpointTx: Transaction = await this.getObject(
-            input.outpoint.txid
-          );
-          if (input.outpoint.index >= outpointTx.outputs.length) {
-            return false;
-          }
-
-          // Check signature
-          if (!isValidHex(input.sig, 128)) {
-            return false;
-          }
-          const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
-          if (!isValidHex(pubkey, 64)) {
-            throw Error("Outpoint public key is invalid");
-          }
-
-          const sigVerified = await verifySig(
-            input.sig,
-            canonicalize(nulledTx),
-            pubkey
-          );
-          if (!sigVerified) {
-            return false;
-          }
-
-          sumInputs += outpointTx.outputs[input.outpoint.index].value;
-        }
-
-        // Check outputs: pubkey is valid format and value is non-negative
-        for (const output of obj.outputs) {
-          if (!isValidHex(output.pubkey, 64) || output.value < 0) {
-            return false;
-          }
-          sumOutputs += output.value;
-        }
-
-        // Check conservation of UTXOs
-        if (sumInputs < sumOutputs) {
-          return false;
-        }
-
-        return true;
+        return this.validateNonCoinbaseTransaction(obj);
       } else if (CoinbaseTransactionRecord.guard(obj)) {
-        return true;
+        return this.validateCoinbaseTransaction(obj);
       } else if (BlockRecord.guard(obj)) {
-        return true;
+        return this.validateBlock(obj);
       }
 
-      //not a valid transaction format; need to return error to node that sent it to us
+      // not a valid transaction format; need to return error to node that sent it to us
       return false;
     } catch (err) {
       logger.warn("Validation failed -", err);
       return false;
     }
+  }
+
+  async validateNonCoinbaseTransaction(
+    tx: NonCoinbaseTransaction
+  ): Promise<boolean> {
+    const nulledTx = genSignatureNulledTransaction(tx);
+
+    let sumInputs = 0;
+    let sumOutputs = 0;
+
+    // Check inputs
+    for (const input of tx.inputs) {
+      // Check outpoint
+      if (!(await this.objectExists(input.outpoint.txid))) {
+        return false;
+      }
+      const outpointTx: Transaction = await this.getObject(input.outpoint.txid);
+      if (input.outpoint.index >= outpointTx.outputs.length) {
+        return false;
+      }
+
+      const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
+      const sigVerified = await verifySig(
+        input.sig,
+        canonicalize(nulledTx),
+        pubkey
+      );
+      if (!sigVerified) {
+        return false;
+      }
+
+      sumInputs += outpointTx.outputs[input.outpoint.index].value;
+    }
+
+    for (const output of tx.outputs) {
+      sumOutputs += output.value;
+    }
+
+    // Check conservation of UTXOs
+    if (sumInputs < sumOutputs) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async validateCoinbaseTransaction(tx: CoinbaseTransaction): Promise<boolean> {
+    return true;
+    // TODO: implement
+  }
+
+  async validateBlock(block: Block): Promise<boolean> {
+    if (block.T !== TARGET) {
+      return false;
+    }
+
+    if (getObjectID(block) >= block.T) {
+      return false;
+    }
+
+    // Fetch transactions if valid
+    let fetchTxJobPromises = [];
+    for (const txid of block.txids) {
+      if (!this.objectExists(txid)) {
+        this.peerManager.broadcastMessage({type: "getobject", objectid: txid} as GetObjectMsg);
+        fetchTxJobPromises.push(new Promise<Transaction>((resolve, reject) => {
+          this.onReceiveObject.subscribe(async () => {
+            // Can simply use objectExists because we validate the transaction before storage
+            if (this.objectExists(txid)) {
+              return resolve(await this.getObject(txid));
+            }
+          });
+          setTimeout(() => {
+            if (!this.objectExists(txid)) {
+              logger.warn("Could not fetch valid transaction", txid);
+              return reject();
+            }
+          }, TIMEOUT);
+        }));
+      }
+    }
+    try {
+      await Promise.all(fetchTxJobPromises);
+    } catch {
+      logger.warn("Could not verify transactions because fetching failed or transactions are invalid");
+      return false;
+    }
+
+    // TODO: Update UTXO set and check for consistency
+
+    return true;
   }
 }

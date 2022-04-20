@@ -14,12 +14,6 @@ export class PeerManager {
     this.db = db;
   }
 
-  broadcastMessage(msg: Message) {
-    for (const peerSocket of this.connectedPeers.values()) {
-      peerSocket.writeToSocket(msg);
-    }
-  }
-
   async load() {
     try {
       this.knownPeers = new Set(await this.db.get("peers"));
@@ -71,5 +65,11 @@ export class PeerManager {
   peerDisconnected(peer: string) {
     logger.debug(`Peer ${peer} disconnected`);
     this.connectedPeers.delete(peer);
+  }
+
+  broadcastMessage(msg: Message) {
+    for (const peerSocket of this.connectedPeers.values()) {
+      peerSocket.writeToSocket(msg);
+    }
   }
 }

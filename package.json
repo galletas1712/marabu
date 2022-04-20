@@ -19,6 +19,7 @@
     "level-ts": "^2.1.0",
     "runtypes": "^6.5.1",
     "semver": "^7.3.5",
+    "strongly-typed-events": "^3.0.1",
     "winston": "^3.7.2"
   },
   "scripts": {

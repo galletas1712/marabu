@@ -39,7 +39,7 @@ const runNode = async () => {
   const objectDB = new level(objectDBPath);
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
-  const objectManager = new ObjectManager(objectDB);
+  const objectManager = new ObjectManager(objectDB, peerManager);
 
   // Run Server
   logger.debug("Server starting");
