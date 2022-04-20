@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import level from "level-ts";
-import { getObjectID, isValidHex, ObjectManager, verifySig } from "../objectmanager";
+import { getObjectID, ObjectManager, verifySig } from "../objectmanager";
 import * as ed from "@noble/ed25519";
 import "mocha";
 import rimraf from "rimraf";
 import {
   Block,
   CoinbaseTransaction,
+  isValidHex,
   NonCoinbaseTransaction,
   NonCoinbaseTransactionRecord,
   TxOutpoint,
@@ -28,7 +29,8 @@ describe("isValidHex tests", () => {
 });
 
 describe("ObjectManager tests", async () => {
-  const FILE = "./tmp_test_db";
+  const OBJ_DB_FILE = "./tmp_test_db";
+  const UTXO_DB_FILE = "./tmp_test_db_utxo";
   const sk1 = ed.utils.randomPrivateKey();
   const sk2 = ed.utils.randomPrivateKey();
   const sk3 = ed.utils.randomPrivateKey();
@@ -55,15 +57,17 @@ describe("ObjectManager tests", async () => {
   };
 
   let db: level;
+  let utxoDB: level;
   let oj: ObjectManager;
 
   beforeEach(() => {
-    db = new level(FILE);
-    oj = new ObjectManager(db);
+    db = new level(OBJ_DB_FILE);
+    utxoDB = new level(UTXO_DB_FILE);
+    oj = new ObjectManager(db, utxoDB, undefined); // Empty peer manager
   });
 
   afterEach(() => {
-    rimraf.sync(FILE);
+    rimraf.sync(OBJ_DB_FILE);
   });
 
   it("Should store objects correctly", async () => {

@@ -253,8 +253,6 @@ export class ObjectManager {
       return false;
     }
 
-    // TODO: Update UTXO set and check for consistency
-
     //block is invalid if we don't have the previous UTXO, per piazza post
     if(!(await this.UTXOExists(block.previd))){
       logger.warn("Could not find UTXO set corresponding to previd in database");

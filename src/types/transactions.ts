@@ -1,4 +1,4 @@
-import { Literal, Record, String, Number, Array, Static, Union } from "runtypes";
+import { Literal, Record, String, Number, Array, Static, Union, Optional } from "runtypes";
 import { Exact } from "./exact";
 
 export const isValidHex = (
@@ -70,8 +70,8 @@ export const BlockRecord = Exact(Record({
     previd: Hex32,
     created: NonNegativeNumber,
     T: Hex32,
-    miner: String128,
-    note: String128
+    miner: Optional(String128),
+    note: Optional(String128),
 }));
 
 export const TransactionRecord = Union(CoinbaseTransactionRecord, NonCoinbaseTransactionRecord);
