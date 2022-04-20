@@ -65,7 +65,7 @@ export class ObjectManager {
 
   constructor(db: level, dbUTXO: level, peerManager: PeerManager) {
     this.db = db;
-    this.dbUTXO = db;
+    this.dbUTXO = dbUTXO;
     this.cache = new Map();
     this.cacheUTXO = new Map();
     this.peerManager = peerManager;
