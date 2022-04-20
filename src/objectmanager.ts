@@ -72,6 +72,9 @@ export class ObjectManager {
   }
 
   async initWithGenesisBlock() {
+    if (getObjectID(GENESIS) !== GENESIS_BLOCKID) {
+      throw Error("Get Object ID is invalid: Genesis block id inconsistent");
+    }
     if (!await this.objectExists(GENESIS_BLOCKID)) {
       await this.storeObject(GENESIS);
     }
@@ -123,10 +126,13 @@ export class ObjectManager {
         return true;
       } else if (BlockRecord.guard(obj)) {
         return this.validateBlock(obj);
+      } else if (getObjectID(obj) === GENESIS_BLOCKID) {
+        return true;
+      } else {
+        // not a valid transaction format; need to return error to node that sent it to us
+        return false;
       }
 
-      // not a valid transaction format; need to return error to node that sent it to us
-      return false;
     } catch (err) {
       logger.warn("Validation failed -", err);
       return false;
