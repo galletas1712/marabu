@@ -10,8 +10,9 @@ import { ObjectManager } from "./objectmanager";
 const args = process.argv.slice(2);
 const peersDBPath = args[0];
 const objectDBPath = args[1];
-const serverHostname = args[2];
-const serverPort = args[3];
+const utxoDBPath = args[2]
+const serverHostname = args[3];
+const serverPort = args[4];
 
 const handleConnection = async (
   socket: net.Socket,
@@ -37,9 +38,10 @@ const handleConnection = async (
 const runNode = async () => {
   const peersDB = new level(peersDBPath);
   const objectDB = new level(objectDBPath);
+  const utxoDB = new level(utxoDBPath); 
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
-  const objectManager = new ObjectManager(objectDB, peerManager);
+  const objectManager = new ObjectManager(objectDB, utxoDB, peerManager);
 
   // Run Server
   logger.debug("Server starting");

@@ -56,14 +56,36 @@ export const verifySig = async (
 
 export class ObjectManager {
   private db: level;
+  private dbUTXO: level;
   private cache: Map<string, Object>;
+  private cacheUTXO: Map<string, Array<[String, Number]>>;
   private peerManager: PeerManager;
   private onReceiveObject: SignalDispatcher;
 
-  constructor(db: level, peerManager: PeerManager) {
+  constructor(db: level, dbUTXO: level, peerManager: PeerManager) {
     this.db = db;
+    this.dbUTXO = db;
     this.cache = new Map();
+    this.cacheUTXO = new Map();
     this.peerManager = peerManager;
+  }
+
+  async UTXOExists(blockid: string){
+    return this.cacheUTXO.has(blockid) || this.dbUTXO.exists(blockid);
+  }
+
+  async getUTXO(blockid: string){
+    if (this.cacheUTXO.has(blockid)) {
+      return this.cacheUTXO.get(blockid);
+    }
+    return this.dbUTXO.get(blockid);
+  }
+
+  async storeUTXO(previd: string, utxoSet: Array<[String, Number]>){
+    this.cacheUTXO.set(previd, utxoSet);
+    await this.dbUTXO.put(previd,utxoSet);
+    this.cacheUTXO.delete(previd);
+    await this.onReceiveObject.dispatch();
   }
 
   async objectExists(objID: string) {
@@ -218,6 +240,37 @@ export class ObjectManager {
 
     // TODO: Update UTXO set and check for consistency
 
+    //block is invalid if we don't have the previous UTXO, per piazza post
+    if(!(await this.UTXOExists(block.previd))){
+      return false;
+    }
+
+    // let UTXO set be previous UTXO set
+    let currentUTXO = await this.getUTXO(block.previd);
+
+    for (let i = 0; i < block.txids.length; i++) {
+      const tx = await this.getObject(block.txids[i]); //should be validated based on previous code; Schwinn pls confirm
+
+      //verifying that all outpoints are unspent
+      for(const input of tx.input){
+        const outpointTuple = input["outpoint"];        
+        if(!currentUTXO.contains(outpointTuple)){
+          return false;
+        } else{
+          //remove outpoint from UTXO set
+          currentUTXO.remove(outpointTuple);
+        }
+      }
+      
+      //add one output tuple per each item in outputs
+      for(let j = 0; j < tx.output.length; j++){
+        //do we need to perform any outpoint value checks here?
+        currentUTXO.add([block.txids[i], j]); //adds a tuple of the form (txid, index); don't need to keep track of value because that's covered during next txn validation anyway
+      }
+    }
+    
+    await this.storeUTXO(getObjectID(block), currentUTXO)
     return true;
   }
+
 }
