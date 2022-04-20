@@ -58,16 +58,14 @@ export const verifySig = async (
 export class ObjectManager {
   private db: level;
   private dbUTXO: level;
-  private cache: Map<string, Object>;
-  private cacheUTXO: Map<string, Set<TxOutpoint> >;
   private peerManager: PeerManager;
-  private onReceiveObject: SignalDispatcher;
+  private cache: Map<string, Object> = new Map();
+  private cacheUTXO: Map<string, Set<TxOutpoint> > = new Map();
+  private onReceiveObject: SignalDispatcher = new SignalDispatcher();
 
   constructor(db: level, dbUTXO: level, peerManager: PeerManager) {
     this.db = db;
     this.dbUTXO = dbUTXO;
-    this.cache = new Map();
-    this.cacheUTXO = new Map();
     this.peerManager = peerManager;
   }
 
@@ -95,7 +93,6 @@ export class ObjectManager {
     this.cacheUTXO.set(previd, utxoSet);
     await this.dbUTXO.put(previd, Array.from(utxoSet));
     this.cacheUTXO.delete(previd);
-    await this.onReceiveObject.dispatch();
   }
 
   async objectExists(objID: string): Promise<boolean> {
@@ -188,24 +185,24 @@ export class ObjectManager {
       return false;
     }
 
-    if (getObjectID(block) >= block.T) {
+    if (getObjectID(block).localeCompare(block.T) >= 0) {
       return false;
     }
 
     // Fetch transactions if valid
     let fetchTxJobPromises = [];
     for (const txid of block.txids) {
-      if (!this.objectExists(txid)) {
+      if (!await this.objectExists(txid)) {
         this.peerManager.broadcastMessage({type: "getobject", objectid: txid} as GetObjectMsg);
         fetchTxJobPromises.push(new Promise<Transaction>((resolve, reject) => {
           this.onReceiveObject.subscribe(async () => {
             // Can simply use objectExists because we validate the transaction before storage
-            if (this.objectExists(txid)) {
+            if (await this.objectExists(txid)) {
               return resolve(await this.getObject(txid) as Transaction);
             }
           });
-          setTimeout(() => {
-            if (!this.objectExists(txid)) {
+          setTimeout(async () => {
+            if (!await this.objectExists(txid)) {
               logger.warn("Could not fetch valid transaction", txid);
               return reject();
             }
