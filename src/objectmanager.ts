@@ -17,7 +17,7 @@ import {
   TxInput,
 } from "./types/transactions";
 import { hexTou8 } from "./util";
-import { TARGET, TIMEOUT } from "./config";
+import { BLOCK_REWARD, TARGET, TIMEOUT } from "./config";
 import { PeerManager } from "./peermanager";
 import { GetObjectMsg } from "./types/messages";
 
@@ -90,7 +90,8 @@ export class ObjectManager {
       if (NonCoinbaseTransactionRecord.guard(obj)) {
         return this.validateNonCoinbaseTransaction(obj);
       } else if (CoinbaseTransactionRecord.guard(obj)) {
-        return this.validateCoinbaseTransaction(obj);
+        // NOTE: we will validate with the block in a later assignment
+        return true;
       } else if (BlockRecord.guard(obj)) {
         return this.validateBlock(obj);
       }
@@ -147,11 +148,6 @@ export class ObjectManager {
     return true;
   }
 
-  async validateCoinbaseTransaction(tx: CoinbaseTransaction): Promise<boolean> {
-    return true;
-    // TODO: implement
-  }
-
   async validateBlock(block: Block): Promise<boolean> {
     if (block.T !== TARGET) {
       return false;
@@ -186,6 +182,37 @@ export class ObjectManager {
       await Promise.all(fetchTxJobPromises);
     } catch {
       logger.warn("Could not verify transactions because fetching failed or transactions are invalid");
+      return false;
+    }
+
+    let coinbaseTx: CoinbaseTransaction = undefined;
+    let fees = 0;
+    for (let i = 0; i < block.txids.length; i++) {
+      const tx = await this.getObject(block.txids[i]);
+      if (NonCoinbaseTransactionRecord.guard(tx)) {
+        if (!await this.validateNonCoinbaseTransaction(tx)) {
+          return false;
+        }
+        
+        // Accumulate fees
+        for (const input of tx.inputs) {
+          const outpointTx: Transaction = await this.getObject(input.outpoint.txid);
+          fees += outpointTx.outputs[input.outpoint.index].value;
+        }
+        for (const output of tx.outputs) {
+          fees -= output.value;
+        }
+      } else if (CoinbaseTransactionRecord.guard(tx)) {
+        if (i != 0) {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+    
+    // Conservation of coinbase transaction
+    if (coinbaseTx !== undefined && coinbaseTx.outputs[0].value > fees + BLOCK_REWARD) {
       return false;
     }
 

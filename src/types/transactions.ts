@@ -1,4 +1,5 @@
 import { Literal, Record, String, Number, Array, Static, Union } from "runtypes";
+import { Exact } from "./exact";
 
 export const isValidHex = (
   hexString: string,
@@ -24,45 +25,45 @@ export const Hex64 = String.withConstraint((sig: string) => isValidHex(sig, 128)
 export const String128 = String.withConstraint((s: string) => s.length <= 128);
 export const NonNegativeNumber = Number.withConstraint((x: number)=> x >= 0);
 
-export const TxOutpointRecord = Record({
+export const TxOutpointRecord = Exact(Record({
     txid: Hex32,
     index: NonNegativeNumber
-});
+}));
 
-export const TxInputRecord = Record({
+export const TxInputRecord = Exact(Record({
     outpoint: TxOutpointRecord,
     sig: Hex64
-});
+}));
 
-export const NulledTxInputRecord = Record({
+export const NulledTxInputRecord = Exact(Record({
     outpoint: TxOutpointRecord,
     sig: Hex64
-});
+}));
 
-export const TxOutputRecord = Record({
+export const TxOutputRecord = Exact(Record({
     pubkey: Hex32,
     value: NonNegativeNumber
-});
+}));
 
-export const NonCoinbaseTransactionRecord = Record({
+export const NonCoinbaseTransactionRecord = Exact(Record({
     type: Literal("transaction"),
     inputs: Array(TxInputRecord),
     outputs: Array(TxOutputRecord)
-});
+}));
 
-export const NulledNonCoinbaseTransactionRecord = Record({
+export const NulledNonCoinbaseTransactionRecord = Exact(Record({
     type: Literal("transaction"),
     inputs: Array(NulledTxInputRecord),
     outputs: Array(TxOutputRecord)
-});
+}));
 
-export const CoinbaseTransactionRecord = Record({
+export const CoinbaseTransactionRecord = Exact(Record({
     type: Literal("transaction"),
     height: NonNegativeNumber,
-    outputs: Array(TxOutputRecord)
-});
+    outputs: Array(TxOutputRecord).withConstraint((outputs) => outputs.length == 1)
+}));
 
-export const BlockRecord = Record({
+export const BlockRecord = Exact(Record({
     type: Literal("block"),
     txids: Array(Hex32),
     nonce: Hex32,
@@ -71,7 +72,7 @@ export const BlockRecord = Record({
     T: Hex32,
     miner: String128,
     note: String128
-});
+}));
 
 export const TransactionRecord = Union(CoinbaseTransactionRecord, NonCoinbaseTransactionRecord);
 
