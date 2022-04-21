@@ -222,9 +222,9 @@ export class ObjectManager {
   }
 
   async validateBlock(block: Block): Promise<boolean> {
-    // if (block.T !== TARGET) {
-    //   return false;
-    // }
+    if (block.T !== TARGET) {
+      return false;
+    }
 
     if (getObjectID(block).localeCompare(block.T) >= 0) {
       return false;
