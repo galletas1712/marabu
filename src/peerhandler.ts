@@ -142,7 +142,7 @@ export class PeerHandler {
         });
       }
     } else {
-      this.connIO.disconnectWithError("Invalid object"); // TODO: do we actually disconnect?
+      this.connIO.disconnectWithError("Invalid object");
     }
   }
 

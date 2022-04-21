@@ -14,7 +14,6 @@ import {
   NulledNonCoinbaseTransaction,
   NulledTxInput,
   Transaction,
-  TransactionRecord,
   TxInput,
   TxOutpoint,
 } from "./types/transactions";
@@ -170,7 +169,6 @@ export class ObjectManager {
         // not a valid transaction format; need to return error to node that sent it to us
         return false;
       }
-
     } catch (err) {
       logger.warn("Validation failed -", err);
       return false;
@@ -189,10 +187,12 @@ export class ObjectManager {
     for (const input of tx.inputs) {
       // Check outpoint
       if (!(await this.objectExists(input.outpoint.txid))) {
+        logger.warn(`Outpoint's transaction ${input.outpoint.txid} does not exist`);
         return false;
       }
       const outpointTx: Transaction = await this.getObject(input.outpoint.txid) as Transaction;
       if (input.outpoint.index >= outpointTx.outputs.length) {
+        logger.warn(`Outpoint's index ${input.outpoint.index} does not exist`);
         return false;
       }
 
@@ -203,6 +203,7 @@ export class ObjectManager {
         pubkey
       );
       if (!sigVerified) {
+        logger.warn("Invalid signature");
         return false;
       }
 
@@ -215,6 +216,7 @@ export class ObjectManager {
 
     // Check conservation of UTXOs
     if (sumInputs < sumOutputs) {
+      logger.warn("UTXO conservation not satisfied");
       return false;
     }
 
@@ -223,10 +225,12 @@ export class ObjectManager {
 
   async validateBlock(block: Block): Promise<boolean> {
     if (block.T !== TARGET) {
+      logger.warn("Wrong target");
       return false;
     }
 
     if (getObjectID(block).localeCompare(block.T) >= 0) {
+      logger.warn("Invalid PoW");
       return false;
     }
 
@@ -235,7 +239,6 @@ export class ObjectManager {
       if (!await this.objectExists(txid)) {
         try {
           await this.fetchObject(txid);
-          logger.debug("SUCCESS!!!\n");
         } catch {
           logger.warn("Could not fetch valid transaction", txid);
           return false;
