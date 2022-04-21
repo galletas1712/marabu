@@ -2,7 +2,7 @@ import { canonicalize } from "json-canonicalize";
 import level from "level-ts";
 import sha256 from "fast-sha256";
 import * as ed from "@noble/ed25519";
-import { SimpleEventDispatcher } from "strongly-typed-events";
+import { SignalDispatcher } from "strongly-typed-events";
 import { logger } from "./logger";
 import {
   Block,
@@ -56,44 +56,84 @@ export const verifySig = async (
   return ed.verify(sig_u8, msg_u8, pubkey_u8);
 };
 
+export class ObjectFetcher {
+  private peerManager: PeerManager;
+  private onReceiveObject: Map<string, SignalDispatcher> = new Map();
+
+  constructor(peerManager: PeerManager) {
+    this.peerManager = peerManager;
+  }
+
+  async notifyObjectArrived(obj: Object) {
+    const id = getObjectID(obj);
+    if (this.onReceiveObject.has(id)) {
+      await this.onReceiveObject.get(id).dispatch();
+      logger.debug(`Requested object ${id} arrived`)
+    }
+  }
+
+  signalFetch(objectid: string) {
+    logger.debug(`Requesting object ${objectid}`);
+    this.peerManager.broadcastMessage({type: "getobject", objectid: objectid} as GetObjectMsg);
+  }
+
+  createListener(objectid: string): SignalDispatcher {
+    const signalDispatcher = new SignalDispatcher();
+    this.onReceiveObject.set(objectid, signalDispatcher);
+    return signalDispatcher;
+  }
+
+  destroyListener(objectid: string) {
+    const signalDispatcher = this.onReceiveObject.get(objectid);
+    signalDispatcher.clear();
+    this.onReceiveObject.delete(objectid);
+  }
+}
+
 export class ObjectManager {
   private db: level;
   private dbUTXO: level;
-  private peerManager: PeerManager;
+  private objectFetcher: ObjectFetcher;
   private cache: Map<string, Object> = new Map();
-  private cacheUTXO: Map<string, Set<TxOutpoint> > = new Map();
-  private onReceiveObject: SimpleEventDispatcher<Transaction> = new SimpleEventDispatcher<Transaction>();
+  private cacheUTXO: Map<string, Map<string, TxOutpoint> > = new Map();
 
-  constructor(db: level, dbUTXO: level, peerManager: PeerManager) {
+  constructor(db: level, dbUTXO: level, objectFetcher: ObjectFetcher) {
     this.db = db;
     this.dbUTXO = dbUTXO;
-    this.peerManager = peerManager;
+    this.objectFetcher = objectFetcher;
   }
 
   async initWithGenesisBlock() {
     if (getObjectID(GENESIS) !== GENESIS_BLOCKID) {
+      console.log(getObjectID(GENESIS));
+      console.log(GENESIS_BLOCKID);
       throw Error("Get Object ID is invalid: Genesis block id inconsistent");
     }
     if (!await this.objectExists(GENESIS_BLOCKID)) {
       await this.storeObject(GENESIS);
     }
+    this.storeUTXOSet(GENESIS_BLOCKID, new Map());
   }
 
   async UTXOExists(blockid: string): Promise<boolean> {
     return this.cacheUTXO.has(blockid) || await this.dbUTXO.exists(blockid);
   }
 
-  async getUTXOSet(blockid: string): Promise<Set<TxOutpoint>> {
+  async getUTXOSet(blockid: string): Promise<Map<string, TxOutpoint>> {
     if (this.cacheUTXO.has(blockid)) {
       return this.cacheUTXO.get(blockid);
     }
-    return new Set(await this.dbUTXO.get(blockid));
+    let result = new Map();
+    for (const outpoint of await this.dbUTXO.get(blockid)) {
+      result.set(getObjectID(outpoint), outpoint);
+    }
+    return result;
   }
 
-  async storeUTXOSet(previd: string, utxoSet: Set<TxOutpoint>) {
-    this.cacheUTXO.set(previd, utxoSet);
-    await this.dbUTXO.put(previd, Array.from(utxoSet));
-    this.cacheUTXO.delete(previd);
+  async storeUTXOSet(blockid: string, utxoSet: Map<string, TxOutpoint>) {
+    this.cacheUTXO.set(blockid, utxoSet);
+    await this.dbUTXO.put(blockid, Array.from(utxoSet));
+    this.cacheUTXO.delete(blockid);
   }
 
   async objectExists(objID: string): Promise<boolean> {
@@ -112,9 +152,7 @@ export class ObjectManager {
     this.cache.set(id, obj);
     await this.db.put(id, obj);
     this.cache.delete(id);
-    if (TransactionRecord.guard(obj)) {
-      await this.onReceiveObject.dispatch(obj);
-    }
+    await this.objectFetcher.notifyObjectArrived(obj);
   }
 
   async validateObject(obj: Object): Promise<boolean> {
@@ -184,43 +222,25 @@ export class ObjectManager {
   }
 
   async validateBlock(block: Block): Promise<boolean> {
-    if (block.T !== TARGET) {
-      return false;
-    }
+    // if (block.T !== TARGET) {
+    //   return false;
+    // }
 
     if (getObjectID(block).localeCompare(block.T) >= 0) {
       return false;
     }
 
     // Fetch transactions if valid
-    let fetchTxJobPromises = [];
     for (const txid of block.txids) {
       if (!await this.objectExists(txid)) {
-        this.peerManager.broadcastMessage({type: "getobject", objectid: txid} as GetObjectMsg);
-        fetchTxJobPromises.push(new Promise<Transaction>((resolve, reject) => {
-          this.onReceiveObject.subscribe(async (tx: Transaction) => {
-            // Can simply use objectExists because we validate the transaction before storage
-            if (getObjectID(tx) === txid) {
-              if (!await this.objectExists(txid)) {
-                logger.warn("OBJECT DOES NOT EXIST IN DATABASE YET!!!");
-              }
-              return resolve(await this.getObject(txid) as Transaction);
-            }
-          });
-          setTimeout(async () => {
-            if (!await this.objectExists(txid)) {
-              logger.warn("Could not fetch valid transaction", txid);
-              return reject();
-            }
-          }, TIMEOUT);
-        }));
+        try {
+          await this.fetchObject(txid);
+          logger.debug("SUCCESS!!!\n");
+        } catch {
+          logger.warn("Could not fetch valid transaction", txid);
+          return false;
+        }
       }
-    }
-    try {
-      await Promise.all(fetchTxJobPromises);
-    } catch {
-      logger.warn("Could not verify transactions because fetching failed or transactions are invalid");
-      return false;
     }
 
     let coinbaseTx: CoinbaseTransaction = undefined;
@@ -283,20 +303,20 @@ export class ObjectManager {
       if (NonCoinbaseTransactionRecord.guard(tx)) {
         //verifying that all outpoints are unspent
         for(const input of tx.inputs){
-          // TODO: test if equality works
-          if (!currentUTXOSet.has(input.outpoint)) {
+          if (!currentUTXOSet.has(getObjectID(input.outpoint))) {
             logger.warn("Transaction refers to UTXO not in set/double spend");
             return false;
           }
             //remove outpoint from UTXO set
-          currentUTXOSet.delete(input.outpoint);
+          currentUTXOSet.delete(getObjectID(input.outpoint));
         }
       }
 
       //add one output tuple per each item in outputs
       for(let j = 0; j < tx.outputs.length; j++){
         //do we need to perform any outpoint value checks here?
-        currentUTXOSet.add({ txid: txid, index: j});
+        const outpoint = { txid: txid, index: j};
+        currentUTXOSet.set(getObjectID(outpoint), outpoint);
       }
     }
     
@@ -304,4 +324,21 @@ export class ObjectManager {
     return true;
   }
 
+  async fetchObject(id: string): Promise<Object> {
+    this.objectFetcher.signalFetch(id);
+    return new Promise<Transaction>((resolve, reject) => {
+      this.objectFetcher.createListener(id).subscribe(async () => {
+        // Can simply use objectExists because we validate the transaction before storage
+        if (await this.objectExists(id)) {
+          this.objectFetcher.destroyListener(id);
+          return resolve(await this.getObject(id) as Transaction);
+        }
+      });
+      setTimeout(async () => {
+        if (!await this.objectExists(id)) {
+          return reject();
+        }
+      }, TIMEOUT);
+    });
+  }
 }

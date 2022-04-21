@@ -5,7 +5,7 @@ import { PeerHandler } from "./peerhandler";
 import { BOOTSTRAP_PEERS } from "./config";
 import { PeerManager } from "./peermanager";
 import { logger } from "./logger";
-import { ObjectManager } from "./objectmanager";
+import { ObjectFetcher, ObjectManager } from "./objectmanager";
 
 const args = process.argv.slice(2);
 const peersDBPath = args[0];
@@ -30,7 +30,7 @@ const handleConnection = async (
   );
   connIO.onConnect();
   peerManager.peerConnected(peerID, connIO);
-  socket.on("data", (data: string) => connIO.onData(data, peerHandler));
+  socket.on("data", (data: string) => connIO.onData(data, peerHandler.onMessage.bind(peerHandler)));
   socket.on("close", () => peerManager.peerDisconnected(peerID));
 };
 
@@ -40,7 +40,9 @@ const runNode = async () => {
   const utxoDB = new level(utxoDBPath); 
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
-  const objectManager = new ObjectManager(objectDB, utxoDB, peerManager);
+  const objectFetcher = new ObjectFetcher(peerManager);
+  const objectManager = new ObjectManager(objectDB, utxoDB, objectFetcher);
+  await objectManager.initWithGenesisBlock();
 
   // Run Server
   logger.debug("Server starting");

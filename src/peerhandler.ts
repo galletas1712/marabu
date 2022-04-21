@@ -38,7 +38,6 @@ export class PeerHandler {
   }
 
   onMessage(msgStr: string) {
-    logger.debug(`Received: ${msgStr}`);
     const message: Message | undefined = this.validateMessage(msgStr);
     if (MessageRecord.guard(message)) {
       this.handleMessage(message);
@@ -133,7 +132,7 @@ export class PeerHandler {
   }
 
   async onObjectMessage(msg: ObjectMsg) {
-    logger.debug("On object message:", msg);
+    logger.debug(`Object message passed typecheck for object with ID: ${getObjectID(msg.object)}`);
     if (await this.objectManager.validateObject(msg.object)) {
       if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
         this.objectManager.storeObject(msg.object);
