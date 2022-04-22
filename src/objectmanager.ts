@@ -16,6 +16,7 @@ import {
   Transaction,
   TxInput,
   TxOutpoint,
+  TxOutput,
 } from "./types/transactions";
 import { hexTou8 } from "./util";
 import { BLOCK_REWARD, GENESIS, GENESIS_BLOCKID, TARGET, TIMEOUT } from "./config";
@@ -94,7 +95,15 @@ export class ObjectManager {
   private dbUTXO: level;
   private objectFetcher: ObjectFetcher;
   private cache: Map<string, Object> = new Map();
-  private cacheUTXO: Map<string, Map<string, TxOutpoint> > = new Map();
+
+  // cacheUTXO maps each blockid to the utxoset that was current after that block
+  // each utxo set is a mapping between (txid, index) => (pubkey, value), where in each transaction
+  // txid is itself, and index is position of stored (pubkey, value) in the outputs array
+
+  //when a utxo is being spent, the outpoints point towards a (txid, index) pair, and we simply check that the
+  // (pubkey, value) that corresponds to that (txid, index) pair exists in the UTXO dictionary
+
+  private cacheUTXO: Map<string, Map<TxOutpoint, TxOutput> > = new Map();
 
   constructor(db: level, dbUTXO: level, objectFetcher: ObjectFetcher) {
     this.db = db;
@@ -118,18 +127,21 @@ export class ObjectManager {
     return this.cacheUTXO.has(blockid) || await this.dbUTXO.exists(blockid);
   }
 
-  async getUTXOSet(blockid: string): Promise<Map<string, TxOutpoint>> {
+  async getUTXOSet(blockid: string): Promise<Map<TxOutpoint, TxOutput>> {
     if (this.cacheUTXO.has(blockid)) {
       return this.cacheUTXO.get(blockid);
     }
+
     let result = new Map();
-    for (const outpoint of await this.dbUTXO.get(blockid)) {
-      result.set(getObjectID(outpoint), outpoint);
+    let blockArray = await this.dbUTXO.get(blockid);
+
+    for(let i = 0; i < blockArray.length; i++){
+      result.set(blockArray[0], blockArray[1]);
     }
     return result;
   }
 
-  async storeUTXOSet(blockid: string, utxoSet: Map<string, TxOutpoint>) {
+  async storeUTXOSet(blockid: string, utxoSet: Map<TxOutpoint, TxOutput>) {
     this.cacheUTXO.set(blockid, utxoSet);
     await this.dbUTXO.put(blockid, Array.from(utxoSet));
     this.cacheUTXO.delete(blockid);
@@ -157,12 +169,12 @@ export class ObjectManager {
   async validateObject(obj: Object): Promise<boolean> {
     try {
       if (NonCoinbaseTransactionRecord.guard(obj)) {
-        return this.validateNonCoinbaseTransaction(obj);
+        return await this.validateNonCoinbaseTransaction(obj);
       } else if (CoinbaseTransactionRecord.guard(obj)) {
         // NOTE: we will validate with the block in a later assignment
         return true;
       } else if (BlockRecord.guard(obj)) {
-        return this.validateBlock(obj);
+        return await this.validateBlock(obj);
       } else if (getObjectID(obj) === GENESIS_BLOCKID) {
         return true;
       } else {
@@ -300,26 +312,27 @@ export class ObjectManager {
     // let UTXO set be previous UTXO set
     let currentUTXOSet = await this.getUTXOSet(block.previd);
 
+    //currentUTXOSet is of the form Map<TxOutpoint, TxOutput> mapping (txid, index) => (pubkey, value)
+
     for (const txid of block.txids) {
       const tx: Transaction = await this.getObject(txid) as Transaction; //should be validated based on previous code; Schwinn pls confirm
 
       if (NonCoinbaseTransactionRecord.guard(tx)) {
         //verifying that all outpoints are unspent
         for(const input of tx.inputs){
-          if (!currentUTXOSet.has(getObjectID(input.outpoint))) {
+          if (!currentUTXOSet.has(input.outpoint)) {
             logger.warn("Transaction refers to UTXO not in set/double spend");
             return false;
           }
             //remove outpoint from UTXO set
-          currentUTXOSet.delete(getObjectID(input.outpoint));
+          currentUTXOSet.delete(input.outpoint);
         }
       }
 
-      //add one output tuple per each item in outputs
+
       for(let j = 0; j < tx.outputs.length; j++){
-        //do we need to perform any outpoint value checks here?
         const outpoint = { txid: txid, index: j};
-        currentUTXOSet.set(getObjectID(outpoint), outpoint);
+        currentUTXOSet.set(outpoint, tx.outputs[j])
       }
     }
     
