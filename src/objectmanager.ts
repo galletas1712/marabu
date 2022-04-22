@@ -136,7 +136,7 @@ export class ObjectManager {
     let blockArray = await this.dbUTXO.get(blockid);
 
     for(let i = 0; i < blockArray.length; i++){
-      result.set(blockArray[0], blockArray[1]);
+      result.set(blockArray[i][0], blockArray[i][1]);
     }
     return result;
   }
@@ -320,7 +320,11 @@ export class ObjectManager {
       if (NonCoinbaseTransactionRecord.guard(tx)) {
         //verifying that all outpoints are unspent
         for(const input of tx.inputs){
-          if (!currentUTXOSet.has(input.outpoint)) {
+
+          for(const key of currentUTXOSet.keys()){
+            if(key.txid === input.outpoint.txid && key.index === input.outpoint.index){
+              break;
+            }  
             logger.warn("Transaction refers to UTXO not in set/double spend");
             return false;
           }
