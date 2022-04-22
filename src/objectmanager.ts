@@ -19,7 +19,13 @@ import {
   TxOutput,
 } from "./types/transactions";
 import { hexTou8 } from "./util";
-import { BLOCK_REWARD, GENESIS, GENESIS_BLOCKID, TARGET, TIMEOUT } from "./config";
+import {
+  BLOCK_REWARD,
+  GENESIS,
+  GENESIS_BLOCKID,
+  TARGET,
+  TIMEOUT,
+} from "./config";
 import { PeerManager } from "./peermanager";
 import { GetObjectMsg } from "./types/messages";
 
@@ -68,13 +74,16 @@ export class ObjectFetcher {
     const id = getObjectID(obj);
     if (this.onReceiveObject.has(id)) {
       await this.onReceiveObject.get(id).dispatch();
-      logger.debug(`Requested object ${id} arrived`)
+      logger.debug(`Requested object ${id} arrived`);
     }
   }
 
   signalFetch(objectid: string) {
     logger.debug(`Requesting object ${objectid}`);
-    this.peerManager.broadcastMessage({type: "getobject", objectid: objectid} as GetObjectMsg);
+    this.peerManager.broadcastMessage({
+      type: "getobject",
+      objectid: objectid,
+    } as GetObjectMsg);
   }
 
   createListener(objectid: string): SignalDispatcher {
@@ -95,15 +104,10 @@ export class ObjectManager {
   private dbUTXO: level;
   private objectFetcher: ObjectFetcher;
   private cache: Map<string, Object> = new Map();
-
-  // cacheUTXO maps each blockid to the utxoset that was current after that block
-  // each utxo set is a mapping between (txid, index) => (pubkey, value), where in each transaction
-  // txid is itself, and index is position of stored (pubkey, value) in the outputs array
-
-  //when a utxo is being spent, the outpoints point towards a (txid, index) pair, and we simply check that the
-  // (pubkey, value) that corresponds to that (txid, index) pair exists in the UTXO dictionary
-
-  private cacheUTXO: Map<string, Map<TxOutpoint, TxOutput> > = new Map();
+  
+  // cache UTXO maps the blockid to a set of UTXO (in outpoint form) hashes
+  // We don't store the UTXO in outpoint form directly because we need equality comparison to work properly
+  private cacheUTXO: Map<string, Set<string>> = new Map();
 
   constructor(db: level, dbUTXO: level, objectFetcher: ObjectFetcher) {
     this.db = db;
@@ -113,21 +117,19 @@ export class ObjectManager {
 
   async initWithGenesisBlock() {
     if (getObjectID(GENESIS) !== GENESIS_BLOCKID) {
-      console.log(getObjectID(GENESIS));
-      console.log(GENESIS_BLOCKID);
       throw Error("Get Object ID is invalid: Genesis block id inconsistent");
     }
-    if (!await this.objectExists(GENESIS_BLOCKID)) {
+    if (!(await this.objectExists(GENESIS_BLOCKID))) {
       await this.storeObject(GENESIS);
     }
-    this.storeUTXOSet(GENESIS_BLOCKID, new Map());
+    this.storeUTXOSet(GENESIS_BLOCKID, new Set());
   }
 
   async UTXOExists(blockid: string): Promise<boolean> {
-    return this.cacheUTXO.has(blockid) || await this.dbUTXO.exists(blockid);
+    return this.cacheUTXO.has(blockid) || (await this.dbUTXO.exists(blockid));
   }
 
-  async getUTXOSet(blockid: string): Promise<Map<TxOutpoint, TxOutput>> {
+  async getUTXOSet(blockid: string): Promise<Set<string> > {
     if (this.cacheUTXO.has(blockid)) {
       return this.cacheUTXO.get(blockid);
     }
@@ -135,20 +137,17 @@ export class ObjectManager {
     let result = new Map();
     let blockArray = await this.dbUTXO.get(blockid);
 
-    for(let i = 0; i < blockArray.length; i++){
-      result.set(blockArray[i][0], blockArray[i][1]);
-    }
-    return result;
+    return new Set(blockArray);
   }
 
-  async storeUTXOSet(blockid: string, utxoSet: Map<TxOutpoint, TxOutput>) {
+  async storeUTXOSet(blockid: string, utxoSet: Set<string>) {
     this.cacheUTXO.set(blockid, utxoSet);
     await this.dbUTXO.put(blockid, Array.from(utxoSet));
     this.cacheUTXO.delete(blockid);
   }
 
   async objectExists(objID: string): Promise<boolean> {
-    return this.cache.has(objID) || await this.db.exists(objID);
+    return this.cache.has(objID) || (await this.db.exists(objID));
   }
 
   async getObject(objID: string): Promise<Object> {
@@ -190,6 +189,7 @@ export class ObjectManager {
   async validateNonCoinbaseTransaction(
     tx: NonCoinbaseTransaction
   ): Promise<boolean> {
+    // This function validates without knowledge of whether the outpoints are actually unspent (whether actually UTXOs)
     const nulledTx = genSignatureNulledTransaction(tx);
 
     let sumInputs = 0;
@@ -199,10 +199,18 @@ export class ObjectManager {
     for (const input of tx.inputs) {
       // Check outpoint
       if (!(await this.objectExists(input.outpoint.txid))) {
-        logger.warn(`Outpoint's transaction ${input.outpoint.txid} does not exist`);
-        return false;
+        try {
+          await this.fetchObject(input.outpoint.txid);
+        } catch {
+          logger.warn(
+            `Outpoint's transaction ${input.outpoint.txid} does not exist`
+          );
+          return false;
+        }
       }
-      const outpointTx: Transaction = await this.getObject(input.outpoint.txid) as Transaction;
+      const outpointTx: Transaction = (await this.getObject(
+        input.outpoint.txid
+      )) as Transaction;
       if (input.outpoint.index >= outpointTx.outputs.length) {
         logger.warn(`Outpoint's index ${input.outpoint.index} does not exist`);
         return false;
@@ -248,7 +256,7 @@ export class ObjectManager {
 
     // Fetch transactions if valid
     for (const txid of block.txids) {
-      if (!await this.objectExists(txid)) {
+      if (!(await this.objectExists(txid))) {
         try {
           await this.fetchObject(txid);
         } catch {
@@ -263,7 +271,7 @@ export class ObjectManager {
     for (let i = 0; i < block.txids.length; i++) {
       const tx = await this.getObject(block.txids[i]);
       if (NonCoinbaseTransactionRecord.guard(tx)) {
-        if (!await this.validateNonCoinbaseTransaction(tx)) {
+        if (!(await this.validateNonCoinbaseTransaction(tx))) {
           logger.warn("Found invalid non coinbase transaction in block");
           return false;
         }
@@ -277,10 +285,12 @@ export class ObjectManager {
             }
           }
         }
-        
+
         // Accumulate fees
         for (const input of tx.inputs) {
-          const outpointTx: Transaction = await this.getObject(input.outpoint.txid) as Transaction;
+          const outpointTx: Transaction = (await this.getObject(
+            input.outpoint.txid
+          )) as Transaction;
           fees += outpointTx.outputs[input.outpoint.index].value;
         }
         for (const output of tx.outputs) {
@@ -291,55 +301,56 @@ export class ObjectManager {
           logger.warn("Coinbase transaction appears outside of index 0");
           return false;
         }
+        coinbaseTx = tx;
       } else {
         logger.warn("Found invalid transaction in block");
         return false;
       }
     }
-    
+
     // Conservation of coinbase transaction
-    if (coinbaseTx !== undefined && coinbaseTx.outputs[0].value > fees + BLOCK_REWARD) {
+    if (
+      coinbaseTx !== undefined &&
+      coinbaseTx.outputs[0].value > fees + BLOCK_REWARD
+    ) {
       logger.warn("Coinbase transaction does not satify conservation");
       return false;
     }
 
     //block is invalid if we don't have the previous UTXO, per piazza post
-    if(!(await this.UTXOExists(block.previd))){
-      logger.warn("Could not find UTXO set corresponding to previd in database");
+    if (!(await this.UTXOExists(block.previd))) {
+      logger.warn(
+        "Could not find UTXO set corresponding to previd in database"
+      );
       return false;
     }
 
-    // let UTXO set be previous UTXO set
+    // Let currentUTXOSet be the previous UTXO set
+    // currentUTXOSet is of the form Map<TxOutpoint, TxOutput> mapping (txid, index) => (pubkey, value)
     let currentUTXOSet = await this.getUTXOSet(block.previd);
 
-    //currentUTXOSet is of the form Map<TxOutpoint, TxOutput> mapping (txid, index) => (pubkey, value)
-
     for (const txid of block.txids) {
-      const tx: Transaction = await this.getObject(txid) as Transaction; //should be validated based on previous code; Schwinn pls confirm
+      const tx: Transaction = (await this.getObject(txid)) as Transaction; //should be validated based on previous code; Schwinn pls confirm
 
       if (NonCoinbaseTransactionRecord.guard(tx)) {
-        //verifying that all outpoints are unspent
-        for(const input of tx.inputs){
-
-          for(const key of currentUTXOSet.keys()){
-            if(key.txid === input.outpoint.txid && key.index === input.outpoint.index){
-              break;
-            }  
+        // Verify that all outpoints are unspent
+        for (const input of tx.inputs) {
+          const outpointHash = getObjectID(input.outpoint);
+          if (!currentUTXOSet.has(outpointHash)) {
             logger.warn("Transaction refers to UTXO not in set/double spend");
             return false;
           }
-            //remove outpoint from UTXO set
-          currentUTXOSet.delete(input.outpoint);
+          // Remove outpoint from UTXO set
+          currentUTXOSet.delete(outpointHash);
         }
       }
 
-
-      for(let j = 0; j < tx.outputs.length; j++){
-        const outpoint = { txid: txid, index: j};
-        currentUTXOSet.set(outpoint, tx.outputs[j])
+      for (let j = 0; j < tx.outputs.length; j++) {
+        const outpointHash = getObjectID({ txid: txid, index: j } as TxOutpoint);
+        currentUTXOSet.add(outpointHash);
       }
     }
-    
+
     this.storeUTXOSet(getObjectID(block), currentUTXOSet);
     return true;
   }
@@ -351,11 +362,11 @@ export class ObjectManager {
         // Can simply use objectExists because we validate the transaction before storage
         if (await this.objectExists(id)) {
           this.objectFetcher.destroyListener(id);
-          return resolve(await this.getObject(id) as Transaction);
+          return resolve((await this.getObject(id)) as Transaction);
         }
       });
       setTimeout(async () => {
-        if (!await this.objectExists(id)) {
+        if (!(await this.objectExists(id))) {
           return reject();
         }
       }, TIMEOUT);

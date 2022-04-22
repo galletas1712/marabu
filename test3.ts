@@ -204,7 +204,7 @@ async function test10(){
 
 
 
-const testsArray = [test10];
+const testsArray = [test1, test2, test3, test4, test5, test6, test7, test8, test9, test10];
 
 async function tests() {
   console.log("------------------------------------------------");
