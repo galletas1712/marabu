@@ -93,9 +93,13 @@ export class ObjectFetcher {
   }
 
   destroyListener(objectid: string) {
-    const signalDispatcher = this.onReceiveObject.get(objectid);
-    signalDispatcher.clear();
-    this.onReceiveObject.delete(objectid);
+    if (this.onReceiveObject.has(objectid)) {
+      const signalDispatcher = this.onReceiveObject.get(objectid);
+      signalDispatcher.clear();
+      this.onReceiveObject.delete(objectid);
+    } else {
+      logger.warn("Dispatcher does not exist for", objectid);
+    }
   }
 }
 
