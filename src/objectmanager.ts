@@ -28,8 +28,9 @@ import {
 } from "./config";
 import { PeerManager } from "./peermanager";
 import { GetObjectMsg } from "./types/messages";
+import { Hex32, Hex64 } from "./types/primitives";
 
-export const getObjectID = (obj: Object): string => {
+export const getObjectID = (obj: Object): Hex32 => {
   const encoder = new TextEncoder();
   return Buffer.from(sha256(encoder.encode(canonicalize(obj)))).toString("hex");
 };
@@ -50,9 +51,9 @@ export const genSignatureNulledTransaction = (
 };
 
 export const verifySig = async (
-  sig: string,
+  sig: Hex64,
   msg: string,
-  pubkey: string
+  pubkey: Hex32
 ): Promise<boolean> => {
   const sig_u8 = hexTou8(sig);
   const pubkey_u8 = hexTou8(pubkey);
@@ -64,7 +65,7 @@ export const verifySig = async (
 
 export class ObjectFetcher {
   private peerManager: PeerManager;
-  private onReceiveObject: Map<string, SignalDispatcher> = new Map();
+  private onReceiveObject: Map<Hex32, SignalDispatcher> = new Map();
 
   constructor(peerManager: PeerManager) {
     this.peerManager = peerManager;
@@ -78,7 +79,7 @@ export class ObjectFetcher {
     }
   }
 
-  signalFetch(objectid: string) {
+  signalFetch(objectid: Hex32) {
     logger.debug(`Requesting object ${objectid}`);
     this.peerManager.broadcastMessage({
       type: "getobject",
@@ -86,13 +87,13 @@ export class ObjectFetcher {
     } as GetObjectMsg);
   }
 
-  createListener(objectid: string): SignalDispatcher {
+  createListener(objectid: Hex32): SignalDispatcher {
     const signalDispatcher = new SignalDispatcher();
     this.onReceiveObject.set(objectid, signalDispatcher);
     return signalDispatcher;
   }
 
-  destroyListener(objectid: string) {
+  destroyListener(objectid: Hex32) {
     if (this.onReceiveObject.has(objectid)) {
       const signalDispatcher = this.onReceiveObject.get(objectid);
       signalDispatcher.clear();
@@ -107,11 +108,11 @@ export class ObjectManager {
   private db: level;
   private dbUTXO: level;
   private objectFetcher: ObjectFetcher;
-  private cache: Map<string, Object> = new Map();
+  private cache: Map<Hex32, Object> = new Map();
   
   // cache UTXO maps the blockid to a set of UTXO (in outpoint form) hashes
   // We don't store the UTXO in outpoint form directly because we need equality comparison to work properly
-  private cacheUTXO: Map<string, Set<string>> = new Map();
+  private cacheUTXO: Map<Hex32, Set<Hex32>> = new Map();
 
   constructor(db: level, dbUTXO: level, objectFetcher: ObjectFetcher) {
     this.db = db;
@@ -129,11 +130,11 @@ export class ObjectManager {
     this.storeUTXOSet(GENESIS_BLOCKID, new Set());
   }
 
-  async UTXOExists(blockid: string): Promise<boolean> {
+  async UTXOExists(blockid: Hex32): Promise<boolean> {
     return this.cacheUTXO.has(blockid) || (await this.dbUTXO.exists(blockid));
   }
 
-  async getUTXOSet(blockid: string): Promise<Set<string> > {
+  async getUTXOSet(blockid: Hex32): Promise<Set<Hex32> > {
     if (this.cacheUTXO.has(blockid)) {
       return this.cacheUTXO.get(blockid);
     }
@@ -144,17 +145,17 @@ export class ObjectManager {
     return new Set(blockArray);
   }
 
-  async storeUTXOSet(blockid: string, utxoSet: Set<string>) {
+  async storeUTXOSet(blockid: Hex32, utxoSet: Set<Hex32>) {
     this.cacheUTXO.set(blockid, utxoSet);
     await this.dbUTXO.put(blockid, Array.from(utxoSet));
     this.cacheUTXO.delete(blockid);
   }
 
-  async objectExists(objID: string): Promise<boolean> {
+  async objectExists(objID: Hex32): Promise<boolean> {
     return this.cache.has(objID) || (await this.db.exists(objID));
   }
 
-  async getObject(objID: string): Promise<Object> {
+  async getObject(objID: Hex32): Promise<Object> {
     if (this.cache.has(objID)) {
       return this.cache.get(objID);
     }
@@ -359,7 +360,7 @@ export class ObjectManager {
     return true;
   }
 
-  async fetchObject(id: string): Promise<Object> {
+  async fetchObject(id: Hex32): Promise<Object> {
     this.objectFetcher.signalFetch(id);
     return new Promise<Transaction>((resolve, reject) => {
       this.objectFetcher.createListener(id).subscribe(async () => {

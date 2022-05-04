@@ -60,7 +60,6 @@ function createNewClient(messages) {
 
 function hashObject(txn) {
   const dummyBD = new Level("./testDB");
-  let obm = new ObjectManager(dummyBD);
   let objid = getObjectID(txn);
   return objid;
 }

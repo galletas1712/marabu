@@ -1,48 +1,26 @@
 import { Literal, Record, String, Number, Array, Static, Union, Optional } from "runtypes";
 import { Exact } from "./exact";
+import { Hex32RunType, NonNegativeNumberRunType, Hex64RunType, String128RunType } from "./primitives";
 
-export const isValidHex = (
-  hexString: string,
-  expectedLength: number
-): boolean => {
-  for (let i = 0; i < hexString.length; i++) {
-    if (
-      !(
-        (hexString[i] >= "0" && hexString[i] <= "9") ||
-        (hexString[i] >= "a" && hexString[i] <= "f")
-      )
-    ) {
-      return false;
-    }
-  }
-  return (
-    hexString.length === expectedLength && hexString.toLowerCase() === hexString
-  );
-};
-
-export const Hex32 = String.withConstraint((pk: string) => isValidHex(pk, 64));
-export const Hex64 = String.withConstraint((sig: string) => isValidHex(sig, 128));
-export const String128 = String.withConstraint((s: string) => s.length <= 128);
-export const NonNegativeNumber = Number.withConstraint((x: number)=> x >= 0);
 
 export const TxOutpointRecord = Exact(Record({
-    txid: Hex32,
-    index: NonNegativeNumber
+    txid: Hex32RunType,
+    index: NonNegativeNumberRunType
 }));
 
 export const TxInputRecord = Exact(Record({
     outpoint: TxOutpointRecord,
-    sig: Hex64
+    sig: Hex64RunType
 }));
 
 export const NulledTxInputRecord = Exact(Record({
     outpoint: TxOutpointRecord,
-    sig: Hex64
+    sig: Hex64RunType
 }));
 
 export const TxOutputRecord = Exact(Record({
-    pubkey: Hex32,
-    value: NonNegativeNumber
+    pubkey: Hex32RunType,
+    value: NonNegativeNumberRunType
 }));
 
 export const NonCoinbaseTransactionRecord = Exact(Record({
@@ -59,19 +37,19 @@ export const NulledNonCoinbaseTransactionRecord = Exact(Record({
 
 export const CoinbaseTransactionRecord = Exact(Record({
     type: Literal("transaction"),
-    height: NonNegativeNumber,
+    height: NonNegativeNumberRunType,
     outputs: Array(TxOutputRecord).withConstraint((outputs) => outputs.length == 1)
 }));
 
 export const BlockRecord = Exact(Record({
     type: Literal("block"),
-    txids: Array(Hex32),
-    nonce: Hex32,
-    previd: Hex32,
-    created: NonNegativeNumber,
-    T: Hex32,
-    miner: Optional(String128),
-    note: Optional(String128),
+    txids: Array(Hex32RunType),
+    nonce: Hex32RunType,
+    previd: Hex32RunType,
+    created: NonNegativeNumberRunType,
+    T: Hex32RunType,
+    miner: Optional(String128RunType),
+    note: Optional(String128RunType),
 }));
 
 export const TransactionRecord = Union(CoinbaseTransactionRecord, NonCoinbaseTransactionRecord);

@@ -7,6 +7,7 @@ import {
   Union,
   Static,
 } from "runtypes";
+import { Hex32RunType } from "./primitives";
 
 export const HelloMsgRecord = Record({
   type: Literal("hello"),
@@ -30,12 +31,12 @@ export const PeersMsgRecord = Record({
 
 export const GetObjectMsgRecord = Record({
   type: Literal("getobject"),
-  objectid: String,
+  objectid: Hex32RunType,
 });
 
 export const IHaveObjectMsgRecord = Record({
   type: Literal("ihaveobject"),
-  objectid: String,
+  objectid: Hex32RunType,
 });
 
 export const ObjectMsgRecord = Record({
@@ -49,7 +50,7 @@ export const GetMempoolMsgRecord = Record({
 
 export const MempoolMsgRecord = Record({
   type: Literal("mempool"),
-  txids: Array(String),
+  txids: Array(Hex32RunType),
 });
 
 export const GetChainTipMsgRecord = Record({
@@ -58,7 +59,7 @@ export const GetChainTipMsgRecord = Record({
 
 export const ChainTipMsgRecord = Record({
   type: Literal("chaintip"),
-  blockid: String,
+  blockid: Hex32RunType,
 });
 
 export const MessageRecord = Union(
