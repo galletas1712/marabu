@@ -1,11 +1,11 @@
-import { getObjectID, ObjectManager } from "./src/objectmanager";
+import { getObjectID, ObjectManager } from "../objectmanager";
 import * as net from "net";
 import Level from "level-ts";
 import { randomBytes } from "crypto";
 import { canonicalize } from "json-canonicalize";
 import * as ed from "@noble/ed25519";
 import { Console } from "console";
-import { CoinbaseTransaction, CoinbaseTransactionRecord, NonCoinbaseTransactionRecord } from "./src/types/transactions";
+import { CoinbaseTransaction, CoinbaseTransactionRecord, NonCoinbaseTransactionRecord } from "../types/transactions";
 
 const args = process.argv.slice(2);
 const serverHostname = args[0];

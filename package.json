@@ -23,6 +23,7 @@
     "winston": "^3.7.2"
   },
   "scripts": {
+    "compile": "tsc",
     "start": "tsc && node dist/index.js",
     "test": "mocha -r ts-node/register src/tests/**/*.test.ts"
   }
