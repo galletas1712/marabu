@@ -2,10 +2,8 @@ import * as net from "net";
 import { canonicalize } from "json-canonicalize";
 import { PeerHandler } from "./peerhandler";
 import { HelloMsg, ErrorMsg, Message, GetPeersMsg } from "./types/messages";
-import { CURRENT_VERSION, AGENT } from "./config";
+import { CURRENT_VERSION, AGENT, TIMEOUT } from "./config";
 import { logger } from "./logger";
-
-const TIMEOUT = 1000;
 
 export class ConnectedSocketIO {
   socket: net.Socket;
@@ -27,14 +25,15 @@ export class ConnectedSocketIO {
     this.writeToSocket({ type: "getpeers" } as GetPeersMsg);
   }
 
-  onData(data: string, peerHandler: PeerHandler) {
+  onData(data: string, onMessage: Function) {
     clearTimeout(this.timeoutID);
     const tokens: Array<String> = data.split(/(?=[\n])|(?<=[\n])/g);
     for (const token of tokens) {
       this.buffer += token;
 
       if (token === "\n") {
-        peerHandler.onMessage(this.buffer);
+        logger.debug(`Received: ${this.buffer.trim()}`);
+        onMessage(this.buffer);
         this.buffer = "";
       }
     }

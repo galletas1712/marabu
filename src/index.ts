@@ -5,20 +5,20 @@ import { PeerHandler } from "./peerhandler";
 import { BOOTSTRAP_PEERS } from "./config";
 import { PeerManager } from "./peermanager";
 import { logger } from "./logger";
-import { ObjectManager } from "./objectmanager";
+import { ObjectFetcher, ObjectManager } from "./objectmanager";
 
 const args = process.argv.slice(2);
 const peersDBPath = args[0];
 const objectDBPath = args[1];
-const serverHostname = args[2];
-const serverPort = args[3];
+const utxoDBPath = args[2]
+const serverHostname = args[3];
+const serverPort = args[4];
 
 const handleConnection = async (
   socket: net.Socket,
   peerManager: PeerManager,
   objectManager: ObjectManager
 ) => {
-  const peerAddressObj = socket.address() as net.AddressInfo;
   const peerID = Math.floor(Math.random() * 1e9).toString();
 
   const connIO = new ConnectedSocketIO(socket);
@@ -30,16 +30,19 @@ const handleConnection = async (
   );
   connIO.onConnect();
   peerManager.peerConnected(peerID, connIO);
-  socket.on("data", (data: string) => connIO.onData(data, peerHandler));
+  socket.on("data", (data: string) => connIO.onData(data, peerHandler.onMessage.bind(peerHandler)));
   socket.on("close", () => peerManager.peerDisconnected(peerID));
 };
 
 const runNode = async () => {
   const peersDB = new level(peersDBPath);
   const objectDB = new level(objectDBPath);
+  const utxoDB = new level(utxoDBPath); 
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
-  const objectManager = new ObjectManager(objectDB);
+  const objectFetcher = new ObjectFetcher(peerManager);
+  const objectManager = new ObjectManager(objectDB, utxoDB, objectFetcher);
+  await objectManager.initWithGenesisBlock();
 
   // Run Server
   logger.debug("Server starting");
