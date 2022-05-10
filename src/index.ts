@@ -2,17 +2,20 @@ import * as net from "net";
 import level from "level-ts";
 import { ConnectedSocketIO } from "./socketio";
 import { PeerHandler } from "./peerhandler";
-import { BOOTSTRAP_PEERS } from "./config";
 import { PeerManager } from "./peermanager";
 import { logger } from "./logger";
-import { ObjectFetcher, ObjectManager } from "./objectmanager";
+import { ObjectManager } from "./objects/objectmanager";
+import { ObjectIO } from "./objects/objectio";
+import { UTXOIO } from "./objects/utxoio";
+import { OBJECT_DB_PATH, PEERS_DB_PATH, UTXO_DB_PATH } from "./config";
 
 const args = process.argv.slice(2);
-const peersDBPath = args[0];
-const objectDBPath = args[1];
-const utxoDBPath = args[2]
-const serverHostname = args[3];
-const serverPort = args[4];
+const serverHostname = args[0];
+const serverPort = args[1];
+
+const peersDBPath = PEERS_DB_PATH;
+const objectDBPath = OBJECT_DB_PATH;
+const utxoDBPath = UTXO_DB_PATH;
 
 const handleConnection = async (
   socket: net.Socket,
@@ -40,8 +43,9 @@ const runNode = async () => {
   const utxoDB = new level(utxoDBPath); 
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
-  const objectFetcher = new ObjectFetcher(peerManager);
-  const objectManager = new ObjectManager(objectDB, utxoDB, objectFetcher);
+  const objectIO = new ObjectIO(objectDB, peerManager);
+  const utxoIO = new UTXOIO(utxoDB);
+  const objectManager = new ObjectManager(objectIO, utxoIO);
   await objectManager.initWithGenesisBlock();
 
   // Run Server

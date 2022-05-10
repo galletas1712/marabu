@@ -1,10 +1,8 @@
-import level from "level-ts";
 import * as semver from "semver";
 import { ACCEPTABLE_VERSIONS } from "./config";
 import { logger } from "./logger";
 import {
   HelloMsg,
-  ErrorMsg,
   GetPeersMsg,
   Message,
   MessageRecord,
@@ -13,7 +11,8 @@ import {
   GetObjectMsg,
   ObjectMsg,
 } from "./types/messages";
-import { getObjectID, ObjectManager } from "./objectmanager";
+import { ObjectManager } from "./objects/objectmanager";
+import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
 
@@ -111,10 +110,10 @@ export class PeerHandler {
 
   async onGetObjectMessage(msg: GetObjectMsg) {
     try{
-      if (await this.objectManager.objectExists(msg.objectid)) {
+      if (await this.objectManager.objectIO.objectExists(msg.objectid)) {
         this.connIO.writeToSocket({
           type: "object",
-          object: await this.objectManager.getObject(msg.objectid),
+          object: await this.objectManager.objectIO.getObject(msg.objectid),
         });
       }
     } catch (err){
@@ -123,7 +122,7 @@ export class PeerHandler {
   }
 
   async onIHaveObjectMessage(msg: IHaveObjectMsg) {
-    if (!(await this.objectManager.objectExists(msg.objectid))) {
+    if (!(await this.objectManager.objectIO.objectExists(msg.objectid))) {
       this.connIO.writeToSocket({
         type: "getobject",
         objectid: msg.objectid,
@@ -134,8 +133,8 @@ export class PeerHandler {
   async onObjectMessage(msg: ObjectMsg) {
     logger.debug(`Object message passed typecheck for object with ID: ${getObjectID(msg.object)}`);
     if (await this.objectManager.validateObject(msg.object)) {
-      if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
-        this.objectManager.storeObject(msg.object);
+      if (!await this.objectManager.objectIO.objectExists(getObjectID(msg.object))) {
+        this.objectManager.objectIO.storeObject(msg.object);
         this.peerManager.broadcastMessage({
           type: "ihaveobject",
           objectid: getObjectID(msg.object),

@@ -1,4 +1,5 @@
-import { getObjectID, ObjectManager } from "../objectmanager";
+import { ObjectManager } from "../objects/objectmanager";
+import { getObjectID } from "../objects/util";
 import * as net from "net";
 import Level from "level-ts";
 import { randomBytes } from "crypto";
