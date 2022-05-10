@@ -10,6 +10,8 @@ import {
   IHaveObjectMsg,
   GetObjectMsg,
   ObjectMsg,
+  GetChainTipMessage,
+  ChainTipMessage,
 } from "./types/messages";
 import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
 import { getObjectID } from "./objects/util";
@@ -77,12 +79,16 @@ export class PeerHandler {
       this.onGetPeersMessage(msg);
     } else if (msg.type == "peers") {
       this.onPeersMessage(msg);
-    } else if (msg.type == "object"){
+    } else if (msg.type == "object") {
       this.onObjectMessage(msg);
-    } else if (msg.type == "ihaveobject"){
+    } else if (msg.type == "ihaveobject") {
       this.onIHaveObjectMessage(msg);
-    } else if (msg.type == "getobject"){
+    } else if (msg.type == "getobject") {
       this.onGetObjectMessage(msg);
+    } else if (msg.type == "getchaintip") {
+      this.onGetChainTipMessage();
+    } else if (msg.type == "chaintip") {
+      this.onChainTipMessage(msg);
     } else {
       this.echo(msg);
     }
@@ -139,6 +145,23 @@ export class PeerHandler {
         });
     } else if (tryStoreObjectResult === ObjectValidationResult.Rejected) {
       this.connIO.disconnectWithError("Invalid object");
+    }
+  }
+
+  onGetChainTipMessage() {
+    if (this.objectManager.longestChainTipID !== null) {
+      this.connIO.writeToSocket({ type: "chaintip", blockid: this.objectManager.longestChainTipID });
+    }
+    return this.objectManager.longestChainTipID;
+  }
+
+  async onChainTipMessage(msg: ChainTipMessage) {
+    if (!await this.objectManager.objectIO.objectExists(msg.blockid)) {
+      try {
+        await this.objectManager.objectIO.fetchObject(msg.blockid);
+      } catch {
+        logger.warn(`Could not fetch chain tip with block id ${msg.blockid}`);
+      }
     }
   }
 

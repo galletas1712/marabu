@@ -20,6 +20,7 @@ import { getObjectID, genSignatureNulledTransaction, verifySig } from "./util";
 import { ObjectIO } from "./objectio";
 import { UTXOIO } from "./utxoio";
 import Level from "level-ts";
+import { Hex32 } from "../types/primitives";
 
 export enum ObjectValidationResult {
   Rejected,
@@ -55,11 +56,13 @@ export class ObjectManager {
   objectIO: ObjectIO;
   utxoIO: UTXOIO;
   blockHeightDB: Level;
+  longestChainTipID: Hex32 | null;
 
   constructor(objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level) {
     this.objectIO = objectIO;
     this.utxoIO = utxoIO;
     this.blockHeightDB = blockHeightDB;
+    this.longestChainTipID = null;
   }
 
   async initWithGenesisBlock() {
@@ -71,6 +74,15 @@ export class ObjectManager {
     }
     this.utxoIO.storeUTXOSet(GENESIS_BLOCKID, new Set());
     this.blockHeightDB.put(GENESIS_BLOCKID, 0);
+  }
+
+  async initLongestChain() {
+    const blockHeights = await this.blockHeightDB.stream({});
+    for (const { key, value } of blockHeights) {
+      if (value > await this.blockHeightDB.get(this.longestChainTipID)) {
+        this.longestChainTipID = key;
+      }
+    }
   }
 
   async tryStoreObject(obj: Object): Promise<ObjectValidationResult> {
@@ -89,7 +101,13 @@ export class ObjectManager {
       this.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
 
       // Store block height
-      this.blockHeightDB.put(getObjectID(obj), (await this.blockHeightDB.get(obj.previd)) + 1);
+      const blockHeight = (await this.blockHeightDB.get(obj.previd)) + 1;
+      this.blockHeightDB.put(getObjectID(obj), blockHeight);
+
+      // Set chain tip if needed
+      if (blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
+        this.longestChainTipID = getObjectID(obj);
+      }
     }
     this.objectIO.storeObject(obj);
 

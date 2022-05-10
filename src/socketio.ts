@@ -1,7 +1,7 @@
 import * as net from "net";
 import { canonicalize } from "json-canonicalize";
 import { PeerHandler } from "./peerhandler";
-import { HelloMsg, ErrorMsg, Message, GetPeersMsg } from "./types/messages";
+import { HelloMsg, ErrorMsg, Message, GetPeersMsg, GetChainTipMessage } from "./types/messages";
 import { CURRENT_VERSION, AGENT, TIMEOUT } from "./config";
 import { logger } from "./logger";
 
@@ -23,6 +23,7 @@ export class ConnectedSocketIO {
       agent: AGENT,
     } as HelloMsg);
     this.writeToSocket({ type: "getpeers" } as GetPeersMsg);
+    this.writeToSocket({ type: "getchaintip" } as GetChainTipMessage);
   }
 
   onData(data: string, onMessage: Function) {

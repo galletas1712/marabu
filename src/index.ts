@@ -49,6 +49,7 @@ const runNode = async () => {
   const utxoIO = new UTXOIO(utxoDB);
   const objectManager = new ObjectManager(objectIO, utxoIO, blockHeightDB);
   await objectManager.initWithGenesisBlock();
+  await objectManager.initLongestChain();
 
   // Run Server
   logger.debug("Server starting");
