@@ -11,7 +11,7 @@ import {
   GetObjectMsg,
   ObjectMsg,
 } from "./types/messages";
-import { ObjectManager } from "./objects/objectmanager";
+import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
 import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
@@ -131,16 +131,13 @@ export class PeerHandler {
   }
 
   async onObjectMessage(msg: ObjectMsg) {
-    logger.debug(`Object message passed typecheck for object with ID: ${getObjectID(msg.object)}`);
-    if (await this.objectManager.validateObject(msg.object)) {
-      if (!await this.objectManager.objectIO.objectExists(getObjectID(msg.object))) {
-        this.objectManager.objectIO.storeObject(msg.object);
+    const tryStoreObjectResult = await this.objectManager.tryStoreObject(msg.object);
+    if (tryStoreObjectResult === ObjectValidationResult.NewAndValid) {
         this.peerManager.broadcastMessage({
           type: "ihaveobject",
           objectid: getObjectID(msg.object),
         });
-      }
-    } else {
+    } else if (tryStoreObjectResult === ObjectValidationResult.Rejected) {
       this.connIO.disconnectWithError("Invalid object");
     }
   }

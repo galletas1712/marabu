@@ -19,6 +19,13 @@ import {
 import { getObjectID, genSignatureNulledTransaction, verifySig } from "./util";
 import { ObjectIO } from "./objectio";
 import { UTXOIO } from "./utxoio";
+import Level from "level-ts";
+
+export enum ObjectValidationResult {
+  Rejected,
+  ObjectExists,
+  NewAndValid
+}
 
 export const deriveNewUTXOSet = async (txs: Array<Transaction>, utxoSet: Set<string>): Promise<Set<string> | null> => {
   let currentUTXOSet = new Set(utxoSet);
@@ -47,10 +54,12 @@ export const deriveNewUTXOSet = async (txs: Array<Transaction>, utxoSet: Set<str
 export class ObjectManager {
   objectIO: ObjectIO;
   utxoIO: UTXOIO;
+  blockHeightDB: Level;
 
-  constructor(objectIO: ObjectIO, utxoIO: UTXOIO) {
+  constructor(objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level) {
     this.objectIO = objectIO;
     this.utxoIO = utxoIO;
+    this.blockHeightDB = blockHeightDB;
   }
 
   async initWithGenesisBlock() {
@@ -61,20 +70,43 @@ export class ObjectManager {
       await this.objectIO.storeObject(GENESIS);
     }
     this.utxoIO.storeUTXOSet(GENESIS_BLOCKID, new Set());
+    this.blockHeightDB.put(GENESIS_BLOCKID, 0);
   }
 
+  async tryStoreObject(obj: Object): Promise<ObjectValidationResult> {
+    if (!(await this.validateObject(obj))) {
+      return ObjectValidationResult.Rejected;
+    }
+    if (await this.objectIO.objectExists(getObjectID(obj))) {
+      return ObjectValidationResult.ObjectExists;
+    }
+
+    if (BlockRecord.guard(obj)) {
+      // Store UTXOs
+      const prevUTXOSet = await this.utxoIO.getUTXOSet(obj.previd);
+      const blockTxs = await Promise.all(obj.txids.map(async (txid) => (await this.objectIO.getObject(txid)) as Transaction));
+      const newUTXOSet = await deriveNewUTXOSet(blockTxs, prevUTXOSet);
+      this.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
+
+      // Store block height
+      this.blockHeightDB.put(getObjectID(obj), (await this.blockHeightDB.get(obj.previd)) + 1);
+    }
+    this.objectIO.storeObject(obj);
+
+    return ObjectValidationResult.NewAndValid;
+  }
 
   async validateObject(obj: Object): Promise<boolean> {
     try {
       if (NonCoinbaseTransactionRecord.guard(obj)) {
         return await this.validateNonCoinbaseTransaction(obj);
       } else if (CoinbaseTransactionRecord.guard(obj)) {
-        // NOTE: we will validate with the block in a later assignment
+        // TODO: validate PoW
         return true;
       } else if (getObjectID(obj) === GENESIS_BLOCKID) {
         return true;
       } else if (BlockRecord.guard(obj)) {
-        return await this.validateBlockAndStoreUTXO(obj);
+        return await this.validateBlock(obj);
       } else {
         // not a valid transaction format; need to return error to node that sent it to us
         return false;
@@ -142,7 +174,7 @@ export class ObjectManager {
     return true;
   }
 
-  async validateBlockAndStoreUTXO(block: Block): Promise<boolean> {
+  async validateBlock(block: Block): Promise<boolean> {
     // NOTE: Assumes block is not a genesis block
     if (block.T !== TARGET) {
       logger.warn("Wrong target");
@@ -213,31 +245,42 @@ export class ObjectManager {
     }
 
     // Fetch preceding block (implicitly recursively validates)
-    // if (block.previd === null) {
-    //   logger.warn("Block stops at wrong genesis");
-    //   return false;
-    // }
-    // if (block.previd !== GENESIS_BLOCKID && !(await this.objectIO.objectExists(block.previd))) {
-    //   try {
-    //     await this.objectIO.fetchObject(block.previd);
-    //   } catch {
-    //     logger.warn(`Could not fetch preceding block with previd ${block.previd}`);
-    //     return false;
-    //   }
-    // }
+    if (block.previd === null) {
+      logger.warn("Block stops at wrong genesis");
+      return false;
+    }
+    if (block.previd !== GENESIS_BLOCKID && !(await this.objectIO.objectExists(block.previd))) {
+      try {
+        await this.objectIO.fetchObject(block.previd);
+      } catch {
+        logger.warn(`Could not fetch preceding block with previd ${block.previd}`);
+        return false;
+      }
+    }
 
-    // // Validate block timestamp
-    // const prevBlock = await this.objectIO.getObject(block.previd) as Block;
-    // if (block.created > Date.now() || block.created < prevBlock.created) {
-    //   logger.warn("Invalid block timestamp");
-    //   return false;
-    // }
+    // Validate block timestamp
+    const prevBlock = await this.objectIO.getObject(block.previd) as Block;
+    if (block.created >= Date.now() || block.created <= prevBlock.created) {
+      logger.warn("Invalid block timestamp");
+      return false;
+    }
 
-    // // Sanity check that the UTXO for the previd exists
-    // if (!await this.utxoIO.UTXOExists(block.previd)) {
-    //   logger.warn(`UTXO set does not exist for previd ${block.previd}`);
-    //   return false;
-    // }
+    // Sanity check that the UTXO for the previd exists
+    if (!await this.utxoIO.UTXOExists(block.previd)) {
+      logger.warn(`Internal error!!! UTXO set does not exist for previd ${block.previd}`);
+      return false;
+    }
+
+    // Sanity check that the block height for the previd exists
+    if (!await this.blockHeightDB.exists(block.previd)) {
+      logger.warn(`Internal error!!! Block height does not exist for previd ${block.previd}`);
+      return false;
+    }
+
+    if (coinbaseTx !== undefined && coinbaseTx.height !== (await this.blockHeightDB.get(block.previd)) + 1) {
+      logger.warn("Coinbase transaction has invalid height");
+      return false;
+    }
 
     // Let currentUTXOSet be the previous UTXO set (starting from the last unfetched block)
     const prevUTXOSet = await this.utxoIO.getUTXOSet(block.previd);
@@ -247,7 +290,6 @@ export class ObjectManager {
       logger.warn("Block has txs inconsistent with UTXO set");
       return false;
     }
-    this.utxoIO.storeUTXOSet(getObjectID(block), newUTXOSet);
     return true;
   }
 }
