@@ -16,7 +16,7 @@ const serverPort = args[1];
 const peersDBPath = PEERS_DB_PATH;
 const objectDBPath = OBJECT_DB_PATH;
 const utxoDBPath = UTXO_DB_PATH;
-const blockHeightDB = BLOCK_HEIGHT_DB_PATH;
+const blockHeightDBPath = BLOCK_HEIGHT_DB_PATH;
 
 const handleConnection = async (
   socket: net.Socket,
@@ -38,11 +38,11 @@ const handleConnection = async (
   socket.on("close", () => peerManager.peerDisconnected(peerID));
 };
 
-const runNode = async () => {
+const runNode = async () =>
   const peersDB = new level(peersDBPath);
   const objectDB = new level(objectDBPath);
   const utxoDB = new level(utxoDBPath); 
-  const blockHeightDB = new level(BLOCK_HEIGHT_DB_PATH);
+  const blockHeightDB = new level(blockHeightDBPath);
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
   const objectIO = new ObjectIO(objectDB, peerManager);
