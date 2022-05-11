@@ -79,7 +79,7 @@ export class ObjectManager {
   async initLongestChain() {
     const blockHeights = await this.blockHeightDB.stream({});
     for (const { key, value } of blockHeights) {
-      if (value > await this.blockHeightDB.get(this.longestChainTipID)) {
+      if (this.longestChainTipID === null || value > await this.blockHeightDB.get(this.longestChainTipID) ) {
         this.longestChainTipID = key;
       }
     }
