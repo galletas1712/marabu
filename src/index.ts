@@ -38,10 +38,11 @@ const handleConnection = async (
   socket.on("close", () => peerManager.peerDisconnected(peerID));
 };
 
-const runNode = async () =>
+const runNode = async () => {
+  
   const peersDB = new level(peersDBPath);
   const objectDB = new level(objectDBPath);
-  const utxoDB = new level(utxoDBPath); 
+  const utxoDB = new level(utxoDBPath);
   const blockHeightDB = new level(blockHeightDBPath);
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
