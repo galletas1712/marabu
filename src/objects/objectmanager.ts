@@ -278,7 +278,7 @@ export class ObjectManager {
 
     // Validate block timestamp
     const prevBlock = await this.objectIO.getObject(block.previd) as Block;
-    if (block.created >= Date.now() || block.created <= prevBlock.created) {
+    if (block.created >= Date.now() / 1000 || block.created <= prevBlock.created) {
       logger.warn("Invalid block timestamp");
       return false;
     }
