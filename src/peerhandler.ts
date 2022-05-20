@@ -1,10 +1,8 @@
-import level from "level-ts";
 import * as semver from "semver";
 import { ACCEPTABLE_VERSIONS } from "./config";
 import { logger } from "./logger";
 import {
   HelloMsg,
-  ErrorMsg,
   GetPeersMsg,
   Message,
   MessageRecord,
@@ -12,8 +10,11 @@ import {
   IHaveObjectMsg,
   GetObjectMsg,
   ObjectMsg,
+  GetChainTipMessage,
+  ChainTipMessage,
 } from "./types/messages";
-import { getObjectID, ObjectManager } from "./objectmanager";
+import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
+import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
 
@@ -78,12 +79,16 @@ export class PeerHandler {
       this.onGetPeersMessage(msg);
     } else if (msg.type == "peers") {
       this.onPeersMessage(msg);
-    } else if (msg.type == "object"){
+    } else if (msg.type == "object") {
       this.onObjectMessage(msg);
-    } else if (msg.type == "ihaveobject"){
+    } else if (msg.type == "ihaveobject") {
       this.onIHaveObjectMessage(msg);
-    } else if (msg.type == "getobject"){
+    } else if (msg.type == "getobject") {
       this.onGetObjectMessage(msg);
+    } else if (msg.type == "getchaintip") {
+      this.onGetChainTipMessage();
+    } else if (msg.type == "chaintip") {
+      this.onChainTipMessage(msg);
     } else {
       this.echo(msg);
     }
@@ -111,10 +116,10 @@ export class PeerHandler {
 
   async onGetObjectMessage(msg: GetObjectMsg) {
     try{
-      if (await this.objectManager.objectExists(msg.objectid)) {
+      if (await this.objectManager.objectIO.objectExists(msg.objectid)) {
         this.connIO.writeToSocket({
           type: "object",
-          object: await this.objectManager.getObject(msg.objectid),
+          object: await this.objectManager.objectIO.getObject(msg.objectid),
         });
       }
     } catch (err){
@@ -123,7 +128,7 @@ export class PeerHandler {
   }
 
   async onIHaveObjectMessage(msg: IHaveObjectMsg) {
-    if (!(await this.objectManager.objectExists(msg.objectid))) {
+    if (!(await this.objectManager.objectIO.objectExists(msg.objectid))) {
       this.connIO.writeToSocket({
         type: "getobject",
         objectid: msg.objectid,
@@ -132,17 +137,31 @@ export class PeerHandler {
   }
 
   async onObjectMessage(msg: ObjectMsg) {
-    logger.debug(`Object message passed typecheck for object with ID: ${getObjectID(msg.object)}`);
-    if (await this.objectManager.validateObject(msg.object)) {
-      if (!await this.objectManager.objectExists(getObjectID(msg.object))) {
-        this.objectManager.storeObject(msg.object);
+    const tryStoreObjectResult = await this.objectManager.tryStoreObject(msg.object);
+    if (tryStoreObjectResult === ObjectValidationResult.NewAndValid) {
         this.peerManager.broadcastMessage({
           type: "ihaveobject",
           objectid: getObjectID(msg.object),
         });
-      }
-    } else {
+    } else if (tryStoreObjectResult === ObjectValidationResult.Rejected) {
       this.connIO.disconnectWithError("Invalid object");
+    }
+  }
+
+  onGetChainTipMessage() {
+    if (this.objectManager.longestChainTipID !== null) {
+      this.connIO.writeToSocket({ type: "chaintip", blockid: this.objectManager.longestChainTipID });
+    }
+    return this.objectManager.longestChainTipID;
+  }
+
+  async onChainTipMessage(msg: ChainTipMessage) {
+    if (!await this.objectManager.objectIO.objectExists(msg.blockid)) {
+      try {
+        await this.objectManager.objectIO.fetchObject(msg.blockid);
+      } catch {
+        logger.warn(`Could not fetch chain tip with block id ${msg.blockid}`);
+      }
     }
   }
 

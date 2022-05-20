@@ -2,17 +2,21 @@ import * as net from "net";
 import level from "level-ts";
 import { ConnectedSocketIO } from "./socketio";
 import { PeerHandler } from "./peerhandler";
-import { BOOTSTRAP_PEERS } from "./config";
 import { PeerManager } from "./peermanager";
 import { logger } from "./logger";
-import { ObjectFetcher, ObjectManager } from "./objectmanager";
+import { ObjectManager } from "./objects/objectmanager";
+import { ObjectIO } from "./objects/objectio";
+import { UTXOIO } from "./objects/utxoio";
+import { BLOCK_HEIGHT_DB_PATH, OBJECT_DB_PATH, PEERS_DB_PATH, UTXO_DB_PATH } from "./config";
 
 const args = process.argv.slice(2);
-const peersDBPath = args[0];
-const objectDBPath = args[1];
-const utxoDBPath = args[2]
-const serverHostname = args[3];
-const serverPort = args[4];
+const serverHostname = args[0];
+const serverPort = args[1];
+
+const peersDBPath = PEERS_DB_PATH;
+const objectDBPath = OBJECT_DB_PATH;
+const utxoDBPath = UTXO_DB_PATH;
+const blockHeightDBPath = BLOCK_HEIGHT_DB_PATH;
 
 const handleConnection = async (
   socket: net.Socket,
@@ -35,14 +39,18 @@ const handleConnection = async (
 };
 
 const runNode = async () => {
+  
   const peersDB = new level(peersDBPath);
   const objectDB = new level(objectDBPath);
-  const utxoDB = new level(utxoDBPath); 
+  const utxoDB = new level(utxoDBPath);
+  const blockHeightDB = new level(blockHeightDBPath);
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
-  const objectFetcher = new ObjectFetcher(peerManager);
-  const objectManager = new ObjectManager(objectDB, utxoDB, objectFetcher);
+  const objectIO = new ObjectIO(objectDB, peerManager);
+  const utxoIO = new UTXOIO(utxoDB);
+  const objectManager = new ObjectManager(objectIO, utxoIO, blockHeightDB);
   await objectManager.initWithGenesisBlock();
+  await objectManager.initLongestChain();
 
   // Run Server
   logger.debug("Server starting");
