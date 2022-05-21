@@ -12,6 +12,8 @@ import {
   ObjectMsg,
   GetChainTipMessage,
   ChainTipMessage,
+  MempoolMessage,
+  GetMempoolMessage,
 } from "./types/messages";
 import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
 import { getObjectID } from "./objects/util";
@@ -170,12 +172,18 @@ export class PeerHandler {
     }
   }
 
-  onMempoolMessage(){
-    return;
+  onMempoolMessage(msg: MempoolMessage){
+    let txids = msg.txids;
+    for(let txid of txids){
+      this.connIO.writeToSocket({
+        type: "getobject",
+        objectid: txid,
+      } as GetObjectMsg);
+    }
   }
 
-  onGetMempoolMessage(){
-    return;
+  async onGetMempoolMessage(msg: GetMempoolMessage){
+    this.connIO.writeToSocket({type: "mempool", txids: await this.objectManager.getMempool()})
   }
 
   echo(msg: Message) {

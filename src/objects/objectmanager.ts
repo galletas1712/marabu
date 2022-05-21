@@ -94,6 +94,7 @@ export class ObjectManager {
   }
 
   async getMempool(){
+    //::TODO:: returns an Array<hex32> from leveldb of mempool
     return;
   }
 
