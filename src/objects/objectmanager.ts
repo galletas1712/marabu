@@ -21,6 +21,7 @@ import { ObjectIO } from "./objectio";
 import { UTXOIO } from "./utxoio";
 import Level from "level-ts";
 import { Hex32 } from "../types/primitives";
+import { Null } from "runtypes";
 
 export enum ObjectValidationResult {
   Rejected,
@@ -56,12 +57,14 @@ export class ObjectManager {
   objectIO: ObjectIO;
   utxoIO: UTXOIO;
   blockHeightDB: Level;
+  mempoolDB: Level;
   longestChainTipID: Hex32 | null;
 
-  constructor(objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level) {
+  constructor(objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level, mempoolDB: Level) {
     this.objectIO = objectIO;
     this.utxoIO = utxoIO;
     this.blockHeightDB = blockHeightDB;
+    this.mempoolDB = mempoolDB;
     this.longestChainTipID = null;
   }
 
@@ -83,6 +86,15 @@ export class ObjectManager {
         this.longestChainTipID = key;
       }
     }
+  }
+
+  async initMempool() {
+    //::TODO:: Apply transactions in longest chain 
+    return;
+  }
+
+  async getMempool(){
+    return;
   }
 
   async tryStoreObject(obj: Object): Promise<ObjectValidationResult> {
@@ -144,6 +156,8 @@ export class ObjectManager {
     let sumInputs = 0;
     let sumOutputs = 0;
 
+    let outpointSet = new Set();
+
     // Check inputs
     for (const input of tx.inputs) {
       // Check outpoint
@@ -164,6 +178,12 @@ export class ObjectManager {
         logger.warn(`Outpoint's index ${input.outpoint.index} does not exist`);
         return false;
       }
+
+      //check that transaction does not have multiple input with the same outpoint
+      if(outpointSet.has(input.outpoint.txid)){
+        return false;
+      }
+      outpointSet.add(input.outpoint.txid);
 
       const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
       const sigVerified = await verifySig(
@@ -298,6 +318,23 @@ export class ObjectManager {
     if (coinbaseTx !== undefined && coinbaseTx.height !== (await this.blockHeightDB.get(block.previd)) + 1) {
       logger.warn("Coinbase transaction has invalid height");
       return false;
+    }
+
+    //Validate that note and miner are ASCII-printable
+    function isASCIIPrintable(str){
+      //accepts ASCII 20 - 126
+      return /^[\x20-\x7E]*$/.test(str);
+    }
+
+    if(block.miner !== undefined){ 
+      if(!isASCIIPrintable(block.miner) || block.miner.length > 128){
+        return false;
+      }
+    }
+    if(block.note !== undefined){
+      if(!isASCIIPrintable(block.note) || block.note.length > 128){
+        return false;
+      }
     }
 
     // Let currentUTXOSet be the previous UTXO set (starting from the last unfetched block)

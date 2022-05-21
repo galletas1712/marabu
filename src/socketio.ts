@@ -1,7 +1,7 @@
 import * as net from "net";
 import { canonicalize } from "json-canonicalize";
 import { PeerHandler } from "./peerhandler";
-import { HelloMsg, ErrorMsg, Message, GetPeersMsg, GetChainTipMessage } from "./types/messages";
+import { HelloMsg, ErrorMsg, Message, GetPeersMsg, GetChainTipMessage, GetMempoolMessage } from "./types/messages";
 import { CURRENT_VERSION, AGENT, TIMEOUT } from "./config";
 import { logger } from "./logger";
 
@@ -24,6 +24,7 @@ export class ConnectedSocketIO {
     } as HelloMsg);
     this.writeToSocket({ type: "getpeers" } as GetPeersMsg);
     this.writeToSocket({ type: "getchaintip" } as GetChainTipMessage);
+    this.writeToSocket({type: "getmempool"} as GetMempoolMessage); //Do we want to do this for every connection?
   }
 
   onData(data: string, onMessage: Function) {

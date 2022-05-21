@@ -17,6 +17,7 @@ import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
 import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
+import { maxHeaderSize } from "http";
 
 export class PeerHandler {
   connIO: ConnectedSocketIO;
@@ -89,6 +90,10 @@ export class PeerHandler {
       this.onGetChainTipMessage();
     } else if (msg.type == "chaintip") {
       this.onChainTipMessage(msg);
+    } else if (msg.type == "getmempool"){
+      this.onGetMempoolMessage(msg);
+    } else if (msg.type == "mempool"){
+      this.onMempoolMessage(msg);
     } else {
       this.echo(msg);
     }
@@ -163,6 +168,14 @@ export class PeerHandler {
         logger.warn(`Could not fetch chain tip with block id ${msg.blockid}`);
       }
     }
+  }
+
+  onMempoolMessage(){
+    return;
+  }
+
+  onGetMempoolMessage(){
+    return;
   }
 
   echo(msg: Message) {

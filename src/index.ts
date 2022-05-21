@@ -7,7 +7,7 @@ import { logger } from "./logger";
 import { ObjectManager } from "./objects/objectmanager";
 import { ObjectIO } from "./objects/objectio";
 import { UTXOIO } from "./objects/utxoio";
-import { BLOCK_HEIGHT_DB_PATH, OBJECT_DB_PATH, PEERS_DB_PATH, UTXO_DB_PATH } from "./config";
+import { BLOCK_HEIGHT_DB_PATH, OBJECT_DB_PATH, PEERS_DB_PATH, UTXO_DB_PATH, MEMPOOL_DB_PATH } from "./config";
 
 const args = process.argv.slice(2);
 const serverHostname = args[0];
@@ -17,6 +17,7 @@ const peersDBPath = PEERS_DB_PATH;
 const objectDBPath = OBJECT_DB_PATH;
 const utxoDBPath = UTXO_DB_PATH;
 const blockHeightDBPath = BLOCK_HEIGHT_DB_PATH;
+const mempoolDBPath = MEMPOOL_DB_PATH;
 
 const handleConnection = async (
   socket: net.Socket,
@@ -48,9 +49,11 @@ const runNode = async () => {
   await peerManager.load();
   const objectIO = new ObjectIO(objectDB, peerManager);
   const utxoIO = new UTXOIO(utxoDB);
-  const objectManager = new ObjectManager(objectIO, utxoIO, blockHeightDB);
+  const mempoolDB = new level(mempoolDBPath)
+  const objectManager = new ObjectManager(objectIO, utxoIO, blockHeightDB, mempoolDB);
   await objectManager.initWithGenesisBlock();
   await objectManager.initLongestChain();
+  await objectManager.initMempool();
 
   // Run Server
   logger.debug("Server starting");
