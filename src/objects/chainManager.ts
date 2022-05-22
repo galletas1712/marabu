@@ -1,6 +1,6 @@
 import assert from "assert";
 import Level from "level-ts";
-import { GENESIS_BLOCKID } from "../config";
+import { GENESIS, GENESIS_BLOCKID } from "../config";
 import { logger } from "../logger";
 import { Hex32 } from "../types/primitives";
 import { Block, NonCoinbaseTransactionRecord, Transaction, TxOutpoint } from "../types/transactions";
@@ -39,7 +39,6 @@ export class ChainManager {
   blockHeightDB: Level;
   mempoolDB: Level;
 
-  // TODO: mempool cache and operations
   constructor (objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level, mempoolDB: Level) {
     this.longestChainTipID = null;
     this.objectIO = objectIO;
@@ -70,7 +69,7 @@ export class ChainManager {
       this.blockHeightDB.put(getObjectID(block), blockHeight);
 
       // Set chain tip if needed
-      if (blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
+      if (this.longestChainTipID === null || blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
         this.longestChainTipID = getObjectID(block);
       }
   }
@@ -87,7 +86,7 @@ export class ChainManager {
     return [];
   }
 
-  async getReorgData(oldBlockID: Hex32, newBlockID: Hex32): Promise<Array<Block>> {
+  async getReorgData(oldBlockID: Hex32, newBlockID: Hex32): Promise<[Block, Array<Hex32>, Array<Block>]> {
     // TODO: remove or else crash!
     assert(await this.blockHeightDB.get(oldBlockID) > await this.blockHeightDB.get(newBlockID));
     let seenBlocks = new Set<Hex32>();
@@ -99,23 +98,24 @@ export class ChainManager {
     while (getObjectID(block1) !== GENESIS_BLOCKID || getObjectID(block2) !== GENESIS_BLOCKID) {
       seenBlocks.add(getObjectID(block1));
       if (seenBlocks.has(getObjectID(block2))) {
-        commonPrefix = getObjectID(block2);
+        commonPrefix = block2;
         break;
       }
       newBlocks.push(block2);
       block1 = await this.objectIO.getObject(block1.previd) as Block;
       block2 = await this.objectIO.getObject(block2.previd) as Block;
     }
+    commonPrefix = GENESIS;
 
-    let oldTxs = [];
+    let oldTxs: Array<Hex32> = [];
     let block = await this.objectIO.getObject(oldBlockID) as Block;
-    while (getObjectID(block) !== commonPrefix) {
+    while (getObjectID(block) !== getObjectID(commonPrefix)) {
       for (const txid of block.txids) {
         oldTxs.push(txid);
       }
       block = await this.objectIO.getObject(block.previd) as Block;
     }
 
-    return newBlocks.reverse();
+    return [commonPrefix, oldTxs, newBlocks.reverse()];
   }
 }

@@ -8,7 +8,6 @@ import {
   NonCoinbaseTransaction,
   NonCoinbaseTransactionRecord,
   Transaction,
-  TxOutpoint,
 } from "../types/transactions";
 import {
   BLOCK_REWARD,
@@ -18,10 +17,6 @@ import {
 } from "../config";
 import { getObjectID, genSignatureNulledTransaction, verifySig } from "./util";
 import { ObjectIO } from "./objectio";
-import { UTXOIO } from "./utxoio";
-import Level from "level-ts";
-import { Hex32 } from "../types/primitives";
-import { Null } from "runtypes";
 import { ChainManager } from "./chainManager";
 
 export enum ObjectValidationResult {
