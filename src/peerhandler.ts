@@ -183,7 +183,7 @@ export class PeerHandler {
   }
 
   async onGetMempoolMessage(){
-    this.connIO.writeToSocket({type: "mempool", txids: await this.chainManager.getMempool()})
+    this.connIO.writeToSocket({type: "mempool", txids: await (await this.chainManager.getMempool()).map(([txid, _]) => txid)})
   }
 
   echo(msg: Message) {

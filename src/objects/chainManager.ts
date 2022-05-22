@@ -38,6 +38,7 @@ export class ChainManager {
   utxoIO: UTXOIO;
   blockHeightDB: Level;
   mempoolDB: Level;
+  mempoolUTXOSet: Set<Hex32> = new Set();
 
   constructor (objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level, mempoolDB: Level) {
     this.longestChainTipID = null;
@@ -56,22 +57,77 @@ export class ChainManager {
     }
   }
 
+  async resetMempool(prefixID?: Hex32, prependTxs?: Array<Transaction>) {
+    this.mempoolUTXOSet = prefixID === undefined ? new Set<Hex32>() : await this.utxoIO.getUTXOSet(prefixID);
+    const prevMempool = await this.getMempool();
+    for (const [txid, _] of prevMempool) {
+      this.mempoolDB.del(txid);
+    }
+    if (prependTxs !== undefined) {
+      for (const tx of prependTxs) {
+        await this.addTxToMempool(tx);
+      }
+    }
+    for (const [_, tx] of prevMempool) {
+      await this.addTxToMempool(tx);
+    }
+  }
+
   async newBlock(block: Block) {
-      const newUTXOSet = await this.getNewUTXOSet(block);
-      if (newUTXOSet !== null) {
-        this.utxoIO.storeUTXOSet(getObjectID(block), newUTXOSet);
+    // NOTE: Assumes block has already been validated
+    const newUTXOSet = await this.getNewUTXOSet(block);
+    if (newUTXOSet !== null) {
+      this.utxoIO.storeUTXOSet(getObjectID(block), newUTXOSet);
+    } else {
+      logger.warn(`Block ${getObjectID(block)} has txs inconsistent with previous UTXO set`);
+    }
+
+    // Store block height
+    const blockHeight = (await this.blockHeightDB.get(block.previd)) + 1;
+    this.blockHeightDB.put(getObjectID(block), blockHeight);
+
+    // Set chain tip if needed
+    if (this.longestChainTipID === null || blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
+      if (this.longestChainTipID !== null) { // Reorg/append
+        const [oldTxIDs, newBlocks] = await this.getReorgData(this.longestChainTipID, getObjectID(block));
+        const oldTxs = await Promise.all(oldTxIDs.map(async (txid) => await this.objectIO.getObject(txid) as Transaction));
+
+        // Remove mempool txs present in new chain
+        for (const predBlock of newBlocks) {
+          for (const txid of predBlock.txids) {
+            if (this.mempoolDB.exists(txid)) {
+              this.mempoolDB.del(txid);
+            }
+          }
+        }
+
+        // Reset mempool UTXO state and filter mempool txs to that of the new chain tip and add in other chain's txs
+        await this.resetMempool(getObjectID(block), oldTxs);
       } else {
-        logger.warn(`Block ${getObjectID(block)} has txs inconsistent with previous UTXO set`);
-      }
+        // Remove mempool txs present in the chain
+        let tmpBlock = block;
+        while (getObjectID(tmpBlock) !== GENESIS_BLOCKID) {
+          for (const txid of tmpBlock.txids) {
+            if (this.mempoolDB.exists(txid)) {
+              this.mempoolDB.del(txid);
+            }
+          }
+          tmpBlock = await this.objectIO.getObject(tmpBlock.previd) as Block;
+        }
 
-      // Store block height
-      const blockHeight = (await this.blockHeightDB.get(block.previd)) + 1;
-      this.blockHeightDB.put(getObjectID(block), blockHeight);
-
-      // Set chain tip if needed
-      if (this.longestChainTipID === null || blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
-        this.longestChainTipID = getObjectID(block);
+        await this.resetMempool(getObjectID(block));
       }
+      this.longestChainTipID = getObjectID(block);
+    }
+  }
+
+  async addTxToMempool(tx: Transaction): Promise<boolean> {
+    const newUTXOSet = await deriveNewUTXOSet([tx], await this.mempoolUTXOSet);
+    if (newUTXOSet !== null) {
+      this.mempoolDB.put(getObjectID(tx), tx);
+      return true;
+    }
+    return false;
   }
 
   async getNewUTXOSet(block: Block): Promise<Set<Hex32> | null> {
@@ -81,14 +137,18 @@ export class ChainManager {
       return newUTXOSet;
   }
 
-  async getMempool(): Promise<Array<Hex32>> {
-    // TODO: fill
-    return [];
+  async getMempool(): Promise<Array<[Hex32, Transaction]>> {
+    const entries = await this.mempoolDB.stream({});
+    let result = [];
+    for (const { key, value } of entries) {
+      result.push([key, value])
+    }
+    return result;
   }
 
-  async getReorgData(oldBlockID: Hex32, newBlockID: Hex32): Promise<[Block, Array<Hex32>, Array<Block>]> {
+  async getReorgData(oldBlockID: Hex32, newBlockID: Hex32): Promise<[Array<Hex32>, Array<Block>]> {
     // TODO: remove or else crash!
-    assert(await this.blockHeightDB.get(oldBlockID) > await this.blockHeightDB.get(newBlockID));
+    assert(await this.blockHeightDB.get(oldBlockID) <= await this.blockHeightDB.get(newBlockID));
     let seenBlocks = new Set<Hex32>();
     let newBlocks: Array<Block> = [];
 
@@ -105,17 +165,25 @@ export class ChainManager {
       block1 = await this.objectIO.getObject(block1.previd) as Block;
       block2 = await this.objectIO.getObject(block2.previd) as Block;
     }
-    commonPrefix = GENESIS;
+    newBlocks.reverse();
+    if (commonPrefix === null) {
+      commonPrefix = GENESIS;
+    }
 
+    let oldBlocks: Array<Block> = [];
     let oldTxs: Array<Hex32> = [];
     let block = await this.objectIO.getObject(oldBlockID) as Block;
     while (getObjectID(block) !== getObjectID(commonPrefix)) {
+      oldBlocks.push(block);
+      block = await this.objectIO.getObject(block.previd) as Block;
+    }
+    oldBlocks.reverse();
+    for (const block of oldBlocks) {
       for (const txid of block.txids) {
         oldTxs.push(txid);
       }
-      block = await this.objectIO.getObject(block.previd) as Block;
     }
 
-    return [commonPrefix, oldTxs, newBlocks.reverse()];
+    return [oldTxs, newBlocks];
   }
 }

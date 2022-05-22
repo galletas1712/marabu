@@ -55,6 +55,7 @@ const runNode = async () => {
   const utxoIO = new UTXOIO(utxoDB);
   const chainManager = new ChainManager(objectIO, utxoIO, blockHeightDB, mempoolDB);
   await chainManager.initLongestChain();
+  await chainManager.resetMempool();
   const objectManager = new ObjectManager(objectIO, chainManager);
   await objectManager.initWithGenesisBlock();
 

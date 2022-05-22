@@ -88,6 +88,10 @@ export class ObjectIO {
     }
   }
 
+  objectPending(objectid: Hex32) {
+    return this.onReceiveObject.has(objectid);
+  }
+
   async fetchBlockBody(block: Block): Promise<void> {
     for (const txid of block.txids) {
       if (!(await this.objectExists(txid))) {

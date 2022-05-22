@@ -8,6 +8,7 @@ import {
   NonCoinbaseTransaction,
   NonCoinbaseTransactionRecord,
   Transaction,
+  TransactionRecord,
 } from "../types/transactions";
 import {
   BLOCK_REWARD,
@@ -56,6 +57,14 @@ export class ObjectManager {
     if (BlockRecord.guard(obj)) {
       // Update block height, UTXOs, and chain tip
       await this.chainManager.newBlock(obj);
+    } else if (NonCoinbaseTransactionRecord.guard(obj)) {
+      if (!this.objectIO.objectPending(getObjectID(obj))) {
+        const addTxResult = this.chainManager.addTxToMempool(obj);
+        if (!addTxResult) {
+          logger.warn("Failed to add transaction to mempool");
+          return ObjectValidationResult.Rejected;
+        }
+      }
     }
     this.objectIO.storeObject(obj);
 
