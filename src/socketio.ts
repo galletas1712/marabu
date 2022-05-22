@@ -24,7 +24,7 @@ export class ConnectedSocketIO {
     } as HelloMsg);
     this.writeToSocket({ type: "getpeers" } as GetPeersMsg);
     this.writeToSocket({ type: "getchaintip" } as GetChainTipMessage);
-    this.writeToSocket({type: "getmempool"} as GetMempoolMessage); //Do we want to do this for every connection?
+    this.writeToSocket({ type: "getmempool" } as GetMempoolMessage);
   }
 
   onData(data: string, onMessage: Function) {

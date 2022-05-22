@@ -15,29 +15,32 @@ import {
   MempoolMessage,
   GetMempoolMessage,
 } from "./types/messages";
-import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
+import { ObjectManager, ObjectValidationResult } from "./objects/objectManager";
 import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
-import { maxHeaderSize } from "http";
+import { ChainManager } from "./objects/chainManager";
 
 export class PeerHandler {
   connIO: ConnectedSocketIO;
   finishedHandshake: boolean;
   peerManager: PeerManager;
   objectManager: ObjectManager;
+  chainManager: ChainManager;
   selfHostWithPort: string;
 
   constructor(
     connIO: ConnectedSocketIO,
     peerManager: PeerManager,
     objectManager: ObjectManager,
+    chainManager: ChainManager,
     selfHostWithPort: string
   ) {
     this.connIO = connIO;
     this.finishedHandshake = false;
     this.peerManager = peerManager;
     this.objectManager = objectManager;
+    this.chainManager = chainManager;
     this.selfHostWithPort = selfHostWithPort;
   }
 
@@ -93,7 +96,7 @@ export class PeerHandler {
     } else if (msg.type == "chaintip") {
       this.onChainTipMessage(msg);
     } else if (msg.type == "getmempool"){
-      this.onGetMempoolMessage(msg);
+      this.onGetMempoolMessage();
     } else if (msg.type == "mempool"){
       this.onMempoolMessage(msg);
     } else {
@@ -156,10 +159,10 @@ export class PeerHandler {
   }
 
   onGetChainTipMessage() {
-    if (this.objectManager.longestChainTipID !== null) {
-      this.connIO.writeToSocket({ type: "chaintip", blockid: this.objectManager.longestChainTipID });
+    if (this.chainManager.longestChainTipID !== null) {
+      this.connIO.writeToSocket({ type: "chaintip", blockid: this.chainManager.longestChainTipID });
     }
-    return this.objectManager.longestChainTipID;
+    return this.chainManager.longestChainTipID;
   }
 
   async onChainTipMessage(msg: ChainTipMessage) {
@@ -175,15 +178,12 @@ export class PeerHandler {
   onMempoolMessage(msg: MempoolMessage){
     let txids = msg.txids;
     for(let txid of txids){
-      this.connIO.writeToSocket({
-        type: "getobject",
-        objectid: txid,
-      } as GetObjectMsg);
+      this.objectManager.objectIO.fetchObject(txid);
     }
   }
 
-  async onGetMempoolMessage(msg: GetMempoolMessage){
-    this.connIO.writeToSocket({type: "mempool", txids: await this.objectManager.getMempool()})
+  async onGetMempoolMessage(){
+    this.connIO.writeToSocket({type: "mempool", txids: await this.chainManager.getMempool()})
   }
 
   echo(msg: Message) {

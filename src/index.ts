@@ -4,10 +4,11 @@ import { ConnectedSocketIO } from "./socketio";
 import { PeerHandler } from "./peerhandler";
 import { PeerManager } from "./peermanager";
 import { logger } from "./logger";
-import { ObjectManager } from "./objects/objectmanager";
+import { ObjectManager } from "./objects/objectManager";
 import { ObjectIO } from "./objects/objectio";
 import { UTXOIO } from "./objects/utxoio";
 import { BLOCK_HEIGHT_DB_PATH, OBJECT_DB_PATH, PEERS_DB_PATH, UTXO_DB_PATH, MEMPOOL_DB_PATH } from "./config";
+import { ChainManager } from "./objects/chainManager";
 
 const args = process.argv.slice(2);
 const serverHostname = args[0];
@@ -22,7 +23,8 @@ const mempoolDBPath = MEMPOOL_DB_PATH;
 const handleConnection = async (
   socket: net.Socket,
   peerManager: PeerManager,
-  objectManager: ObjectManager
+  objectManager: ObjectManager,
+  chainManager: ChainManager,
 ) => {
   const peerID = Math.floor(Math.random() * 1e9).toString();
 
@@ -31,6 +33,7 @@ const handleConnection = async (
     connIO,
     peerManager,
     objectManager,
+    chainManager,
     serverHostname + ":" + serverPort
   );
   connIO.onConnect();
@@ -45,21 +48,21 @@ const runNode = async () => {
   const objectDB = new level(objectDBPath);
   const utxoDB = new level(utxoDBPath);
   const blockHeightDB = new level(blockHeightDBPath);
+  const mempoolDB = new level(mempoolDBPath)
   const peerManager = new PeerManager(peersDB);
   await peerManager.load();
   const objectIO = new ObjectIO(objectDB, peerManager);
   const utxoIO = new UTXOIO(utxoDB);
-  const mempoolDB = new level(mempoolDBPath)
-  const objectManager = new ObjectManager(objectIO, utxoIO, blockHeightDB, mempoolDB);
+  const chainManager = new ChainManager(objectIO, utxoIO, blockHeightDB, mempoolDB);
+  await chainManager.initLongestChain();
+  const objectManager = new ObjectManager(objectIO, chainManager);
   await objectManager.initWithGenesisBlock();
-  await objectManager.initLongestChain();
-  await objectManager.initMempool();
 
   // Run Server
   logger.debug("Server starting");
   const server = net.createServer((socket: net.Socket) => {
     socket.on("error", (err) => logger.warn(`${err}`));
-    handleConnection(socket, peerManager, objectManager);
+    handleConnection(socket, peerManager, objectManager, chainManager);
   });
   server.listen(serverPort);
 
@@ -84,7 +87,7 @@ const runNode = async () => {
 
     const client = new net.Socket();
     client.connect(port, host);
-    client.on("connect", () => handleConnection(client, peerManager, objectManager));
+    client.on("connect", () => handleConnection(client, peerManager, objectManager, chainManager));
     client.on("error", (err) => logger.warn(`${err}`));
   }
 };
