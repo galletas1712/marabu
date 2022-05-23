@@ -34,7 +34,6 @@ export class ConnectedSocketIO {
       this.buffer += token;
 
       if (token === "\n") {
-        logger.debug(`Received: ${this.buffer.trim()}`);
         onMessage(this.buffer);
         this.buffer = "";
       }
@@ -47,7 +46,7 @@ export class ConnectedSocketIO {
   }
 
   writeToSocket(msg: Message) {
-    logger.debug("Writing:", msg);
+    logger.debug(`Writing: ${JSON.stringify(msg, null, 4)}`);
     this.socket.write(canonicalize(msg) + "\n");
   }
 

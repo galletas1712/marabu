@@ -4,6 +4,7 @@ import level from "level-ts";
 import { BOOTSTRAP_PEERS } from "./config";
 import { Message } from "./types/messages";
 import { ConnectedSocketIO } from "./socketio";
+import isReachable from "is-reachable";
 
 export class PeerManager {
   knownPeers: Set<string> = new Set();
@@ -29,7 +30,7 @@ export class PeerManager {
     await this.db.put("peers", [...this.knownPeers]);
   }
 
-  peerDiscovered(peer: string) {
+  async peerDiscovered(peer: string) {
     const peerParts = peer.split(":");
     if (peerParts.length != 2) {
       logger.warn(
@@ -53,8 +54,11 @@ export class PeerManager {
       return;
     }
 
-    this.knownPeers.add(peer);
-    this.store(); // intentionally delayed await
+    if (await isReachable(peer)) {
+      logger.info(`Peer ${peer} is reachable, adding to peers list...`);
+      this.knownPeers.add(peer);
+      await this.store();
+    }
   }
 
   peerConnected(peer: string, socketIOObj: ConnectedSocketIO) {

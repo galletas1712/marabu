@@ -47,6 +47,7 @@ export class PeerHandler {
   onMessage(msgStr: string) {
     const message: Message | undefined = this.validateMessage(msgStr);
     if (MessageRecord.guard(message)) {
+      logger.debug(`Received: ${JSON.stringify(message, null, 4)}`);
       this.handleMessage(message);
     }
   }
@@ -121,7 +122,7 @@ export class PeerHandler {
   }
 
   async onPeersMessage(msg: PeersMsg) {
-    msg.peers.forEach((peer: string) => this.peerManager.peerDiscovered(peer));
+    await Promise.all(msg.peers.map((peer: string) => this.peerManager.peerDiscovered(peer)));
   }
 
   async onGetObjectMessage(msg: GetObjectMsg) {
