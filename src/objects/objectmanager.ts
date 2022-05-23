@@ -56,17 +56,27 @@ export class ObjectManager {
 
     if (BlockRecord.guard(obj)) {
       // Update block height, UTXOs, and chain tip
+      const newUTXOSet = await this.chainManager.getNewUTXOSet(obj);
+      if (newUTXOSet !== null) {
+        await this.chainManager.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
+      } else {
+        logger.warn(`Block ${getObjectID(obj)} has txs inconsistent with previous UTXO set`);
+        return ObjectValidationResult.Rejected;
+      }
+      this.objectIO.storeObject(obj);
       await this.chainManager.newBlock(obj);
-    } else if (NonCoinbaseTransactionRecord.guard(obj)) {
-      if (!this.objectIO.objectPending(getObjectID(obj))) {
-        const addTxResult = this.chainManager.addTxToMempool(obj);
-        if (!addTxResult) {
-          logger.warn("Failed to add transaction to mempool");
-          return ObjectValidationResult.Rejected;
+    } else {
+      if (NonCoinbaseTransactionRecord.guard(obj)) {
+        if (!this.objectIO.objectPending(getObjectID(obj))) {
+          const addTxResult = this.chainManager.addTxToMempool(obj);
+          if (!addTxResult) {
+            logger.warn("Failed to add transaction to mempool");
+            return ObjectValidationResult.Rejected;
+          }
         }
       }
+      this.objectIO.storeObject(obj);
     }
-    this.objectIO.storeObject(obj);
 
     return ObjectValidationResult.NewAndValid;
   }

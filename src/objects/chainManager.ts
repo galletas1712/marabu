@@ -75,16 +75,10 @@ export class ChainManager {
 
   async newBlock(block: Block) {
     // NOTE: Assumes block has already been validated
-    const newUTXOSet = await this.getNewUTXOSet(block);
-    if (newUTXOSet !== null) {
-      this.utxoIO.storeUTXOSet(getObjectID(block), newUTXOSet);
-    } else {
-      logger.warn(`Block ${getObjectID(block)} has txs inconsistent with previous UTXO set`);
-    }
 
     // Store block height
     const blockHeight = (await this.blockHeightDB.get(block.previd)) + 1;
-    this.blockHeightDB.put(getObjectID(block), blockHeight);
+    await this.blockHeightDB.put(getObjectID(block), blockHeight);
 
     // Set chain tip if needed
     if (this.longestChainTipID === null || blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
@@ -96,7 +90,7 @@ export class ChainManager {
         for (const predBlock of newBlocks) {
           for (const txid of predBlock.txids) {
             if (this.mempoolDB.exists(txid)) {
-              this.mempoolDB.del(txid);
+              await this.mempoolDB.del(txid);
             }
           }
         }
@@ -109,7 +103,7 @@ export class ChainManager {
         while (getObjectID(tmpBlock) !== GENESIS_BLOCKID) {
           for (const txid of tmpBlock.txids) {
             if (this.mempoolDB.exists(txid)) {
-              this.mempoolDB.del(txid);
+              await this.mempoolDB.del(txid);
             }
           }
           tmpBlock = await this.objectIO.getObject(tmpBlock.previd) as Block;
@@ -162,7 +156,9 @@ export class ChainManager {
         break;
       }
       newBlocks.push(block2);
-      block1 = await this.objectIO.getObject(block1.previd) as Block;
+      if (getObjectID(block1) !== GENESIS_BLOCKID) {
+        block1 = await this.objectIO.getObject(block1.previd) as Block;
+      }
       block2 = await this.objectIO.getObject(block2.previd) as Block;
     }
     newBlocks.reverse();
