@@ -54,16 +54,12 @@ export class ObjectManager {
       return ObjectValidationResult.ObjectExists;
     }
 
+
     if (BlockRecord.guard(obj)) {
+      this.objectIO.storeObject(obj);
       // Update block height, UTXOs, and chain tip
       const newUTXOSet = await this.chainManager.getNewUTXOSet(obj);
-      if (newUTXOSet !== null) {
-        await this.chainManager.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
-      } else {
-        logger.warn(`Block ${getObjectID(obj)} has txs inconsistent with previous UTXO set`);
-        return ObjectValidationResult.Rejected;
-      }
-      this.objectIO.storeObject(obj);
+      await this.chainManager.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
       await this.chainManager.newBlock(obj);
     } else {
       if (NonCoinbaseTransactionRecord.guard(obj)) {
