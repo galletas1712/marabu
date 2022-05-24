@@ -10,6 +10,11 @@ import {
   TxInput,
 } from "../types/transactions";
 
+export const isASCIIPrintable = (str: string) => {
+  // Accepts ASCII 20 - 126
+  return /^[\x20-\x7E]*$/.test(str);
+}
+
 export const getObjectID = (obj: Object): Hex32 => {
   const encoder = new TextEncoder();
   return Buffer.from(sha256(encoder.encode(canonicalize(obj)))).toString("hex");

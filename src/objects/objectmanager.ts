@@ -8,7 +8,6 @@ import {
   NonCoinbaseTransaction,
   NonCoinbaseTransactionRecord,
   Transaction,
-  TransactionRecord,
 } from "../types/transactions";
 import {
   BLOCK_REWARD,
@@ -16,9 +15,9 @@ import {
   GENESIS_BLOCKID,
   TARGET,
 } from "../config";
-import { getObjectID, genSignatureNulledTransaction, verifySig } from "./util";
+import { getObjectID, genSignatureNulledTransaction, verifySig, isASCIIPrintable } from "./util";
 import { ObjectIO } from "./objectio";
-import { ChainManager } from "./chainManager";
+import { ChainManager } from "./chainmanager";
 
 export enum ObjectValidationResult {
   Rejected,
@@ -271,25 +270,24 @@ export class ObjectManager {
       return false;
     }
 
-    //Validate that note and miner are ASCII-printable
-    function isASCIIPrintable(str){
-      //accepts ASCII 20 - 126
-      return /^[\x20-\x7E]*$/.test(str);
-    }
-
+    // Validate that note and miner are ASCII-printable
     if(block.miner !== undefined){ 
       if(!isASCIIPrintable(block.miner) || block.miner.length > 128){
+        logger.warn("Miner field invalid");
         return false;
       }
     }
+
     if(block.note !== undefined){
       if(!isASCIIPrintable(block.note) || block.note.length > 128){
+        logger.warn("Note field invalid");
         return false;
       }
     }
 
     // Check UTXO consistency
     if (await this.chainManager.getNewUTXOSet(block) === null) {
+      logger.warn("Inconsistent UTXOs");
       return false;
     }
     return true;

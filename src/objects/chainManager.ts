@@ -74,6 +74,7 @@ export class ChainManager {
   }
 
   async newBlock(block: Block) {
+    logger.info(`Calling new block on ${getObjectID(block)}`);
     // NOTE: Assumes block has already been validated
 
     // Store block height
@@ -112,10 +113,14 @@ export class ChainManager {
         await this.resetMempool(getObjectID(block));
       }
       this.longestChainTipID = getObjectID(block);
+      logger.info(`Longest chain tip now at ${this.longestChainTipID}`);
     }
   }
 
   async addTxToMempool(tx: Transaction): Promise<boolean> {
+    if (await this.mempoolDB.exists(getObjectID(tx))) {
+      return true;
+    }
     const newUTXOSet = await deriveNewUTXOSet([tx], await this.mempoolUTXOSet);
     if (newUTXOSet !== null) {
       this.mempoolDB.put(getObjectID(tx), tx);

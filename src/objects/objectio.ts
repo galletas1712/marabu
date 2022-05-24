@@ -13,6 +13,7 @@ export class ObjectIO {
   private peerManager: PeerManager;
   private cache: Map<Hex32, Object> = new Map();
   private onReceiveObject: Map<Hex32, SignalDispatcher> = new Map();
+  private fetchPromises: Map<Hex32, Promise<Object> > = new Map();
 
   constructor(db: level, peerManager: PeerManager) {
     this.db = db;
@@ -39,8 +40,11 @@ export class ObjectIO {
   }
 
   async fetchObject(id: Hex32): Promise<Object> {
+    if (this.fetchPromises.has(id)) {
+      return this.fetchPromises.get(id);
+    }
     this.signalFetch(id);
-    return new Promise<Object>((resolve, reject) => {
+    const promise = new Promise<Object>((resolve, reject) => {
       this.createListener(id).subscribe(async () => {
         // Can simply use objectExists because we validate the transaction before storage
         if (await this.objectExists(id)) {
@@ -53,7 +57,11 @@ export class ObjectIO {
           return reject();
         }
       }, TIMEOUT);
+    }).finally(() => {
+      this.fetchPromises.delete(id);
     });
+    this.fetchPromises.set(id, promise);
+    return promise;
   }
 
   async notifyObjectArrived(obj: Object) {

@@ -10,16 +10,14 @@ import {
   IHaveObjectMsg,
   GetObjectMsg,
   ObjectMsg,
-  GetChainTipMessage,
   ChainTipMessage,
   MempoolMessage,
-  GetMempoolMessage,
 } from "./types/messages";
 import { ObjectManager, ObjectValidationResult } from "./objects/objectManager";
 import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
-import { ChainManager } from "./objects/chainManager";
+import { ChainManager } from "./objects/chainmanager";
 
 export class PeerHandler {
   connIO: ConnectedSocketIO;
@@ -83,7 +81,7 @@ export class PeerHandler {
     if (msg.type == "hello") {
       this.onHelloMessage(msg);
     } else if (msg.type == "getpeers") {
-      this.onGetPeersMessage(msg);
+      this.onGetPeersMessage();
     } else if (msg.type == "peers") {
       this.onPeersMessage(msg);
     } else if (msg.type == "object") {
@@ -114,7 +112,7 @@ export class PeerHandler {
     logger.debug("Completed handshake");
   }
 
-  async onGetPeersMessage(msg: GetPeersMsg) {
+  async onGetPeersMessage() {
     this.connIO.writeToSocket({
       type: "peers",
       peers: Array.from(this.peerManager.knownPeers),
@@ -171,19 +169,26 @@ export class PeerHandler {
       try {
         await this.objectManager.objectIO.fetchObject(msg.blockid);
       } catch {
-        logger.warn(`Could not fetch chain tip with block id ${msg.blockid}`);
+        this.connIO.disconnectWithError(`Invalid chain tip: could not fetch chain tip with block id ${msg.blockid}`);
       }
     }
   }
 
-  onMempoolMessage(msg: MempoolMessage){
+  async onMempoolMessage(msg: MempoolMessage){
     let txids = msg.txids;
     for(let txid of txids){
-      this.objectManager.objectIO.fetchObject(txid);
+      if (!this.objectManager.objectIO.objectExists(txid)) {
+        try {
+          await this.objectManager.objectIO.fetchObject(txid);
+        } catch {
+          this.connIO.disconnectWithError(`Invalid mempool: could not fetch tx ${txid} as specified in mempool`);
+          return;
+        }
+      }
     }
   }
 
-  async onGetMempoolMessage(){
+  async onGetMempoolMessage() {
     this.connIO.writeToSocket({type: "mempool", txids: await (await this.chainManager.getMempool()).map(([txid, _]) => txid)})
   }
 
