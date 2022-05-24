@@ -129,11 +129,11 @@ export class ObjectManager {
         return false;
       }
 
-      //check that transaction does not have multiple input with the same outpoint
-      if(outpointSet.has(input.outpoint.txid)){
+      // Check that transaction does not have multiple inputs with the same outpoint
+      if(outpointSet.has(input.outpoint.txid + input.outpoint.index.toString())){
         return false;
       }
-      outpointSet.add(input.outpoint.txid);
+      outpointSet.add(input.outpoint.txid + input.outpoint.index.toString());
 
       const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
       const sigVerified = await verifySig(
