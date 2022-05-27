@@ -1,10 +1,12 @@
 import { Block } from "./types/transactions";
+import path from "path";
 
-export const PEERS_DB_PATH = "./peers.list";
-export const OBJECT_DB_PATH = "./objects.list";
-export const UTXO_DB_PATH = "./utxo.list";
-export const BLOCK_HEIGHT_DB_PATH = "./Dblock_height_db.list";
-export const MEMPOOL_DB_PATH = "./mempooldb.list"
+export const BASE_DB_PATH = "./db";
+export const PEERS_DB_PATH = path.join(BASE_DB_PATH, "peers.list");
+export const OBJECT_DB_PATH = path.join(BASE_DB_PATH, "objects.list");
+export const UTXO_DB_PATH = path.join(BASE_DB_PATH, "utxo.list");
+export const BLOCK_HEIGHT_DB_PATH = path.join(BASE_DB_PATH, "block_height_db.list");
+export const MEMPOOL_DB_PATH = path.join(BASE_DB_PATH, "mempooldb.list");
 export const CURRENT_VERSION = "0.8.0";
 export const AGENT = "<Kachachan + Schwinn> Marabu Client 0.8";
 export const ACCEPTABLE_VERSIONS = "0.8.x";
