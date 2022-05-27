@@ -16,3 +16,4 @@ testDB/000033.log
 testDB
 *.old
 *.js
+*.list

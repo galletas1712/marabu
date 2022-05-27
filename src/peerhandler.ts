@@ -10,37 +10,42 @@ import {
   IHaveObjectMsg,
   GetObjectMsg,
   ObjectMsg,
-  GetChainTipMessage,
   ChainTipMessage,
+  MempoolMessage,
 } from "./types/messages";
-import { ObjectManager, ObjectValidationResult } from "./objects/objectmanager";
+import { ObjectManager, ObjectValidationResult } from "./objects/objectManager";
 import { getObjectID } from "./objects/util";
 import { PeerManager } from "./peermanager";
 import { ConnectedSocketIO } from "./socketio";
+import { ChainManager } from "./objects/chainmanager";
 
 export class PeerHandler {
   connIO: ConnectedSocketIO;
   finishedHandshake: boolean;
   peerManager: PeerManager;
   objectManager: ObjectManager;
+  chainManager: ChainManager;
   selfHostWithPort: string;
 
   constructor(
     connIO: ConnectedSocketIO,
     peerManager: PeerManager,
     objectManager: ObjectManager,
+    chainManager: ChainManager,
     selfHostWithPort: string
   ) {
     this.connIO = connIO;
     this.finishedHandshake = false;
     this.peerManager = peerManager;
     this.objectManager = objectManager;
+    this.chainManager = chainManager;
     this.selfHostWithPort = selfHostWithPort;
   }
 
   onMessage(msgStr: string) {
     const message: Message | undefined = this.validateMessage(msgStr);
     if (MessageRecord.guard(message)) {
+      logger.debug(`Received: ${JSON.stringify(message, null, 4)}`);
       this.handleMessage(message);
     }
   }
@@ -76,7 +81,7 @@ export class PeerHandler {
     if (msg.type == "hello") {
       this.onHelloMessage(msg);
     } else if (msg.type == "getpeers") {
-      this.onGetPeersMessage(msg);
+      this.onGetPeersMessage();
     } else if (msg.type == "peers") {
       this.onPeersMessage(msg);
     } else if (msg.type == "object") {
@@ -89,6 +94,10 @@ export class PeerHandler {
       this.onGetChainTipMessage();
     } else if (msg.type == "chaintip") {
       this.onChainTipMessage(msg);
+    } else if (msg.type == "getmempool"){
+      this.onGetMempoolMessage();
+    } else if (msg.type == "mempool"){
+      this.onMempoolMessage(msg);
     } else {
       this.echo(msg);
     }
@@ -103,7 +112,7 @@ export class PeerHandler {
     logger.debug("Completed handshake");
   }
 
-  async onGetPeersMessage(msg: GetPeersMsg) {
+  async onGetPeersMessage() {
     this.connIO.writeToSocket({
       type: "peers",
       peers: Array.from(this.peerManager.knownPeers),
@@ -111,7 +120,7 @@ export class PeerHandler {
   }
 
   async onPeersMessage(msg: PeersMsg) {
-    msg.peers.forEach((peer: string) => this.peerManager.peerDiscovered(peer));
+    await Promise.all(msg.peers.map((peer: string) => this.peerManager.peerDiscovered(peer)));
   }
 
   async onGetObjectMessage(msg: GetObjectMsg) {
@@ -149,10 +158,10 @@ export class PeerHandler {
   }
 
   onGetChainTipMessage() {
-    if (this.objectManager.longestChainTipID !== null) {
-      this.connIO.writeToSocket({ type: "chaintip", blockid: this.objectManager.longestChainTipID });
+    if (this.chainManager.longestChainTipID !== null) {
+      this.connIO.writeToSocket({ type: "chaintip", blockid: this.chainManager.longestChainTipID });
     }
-    return this.objectManager.longestChainTipID;
+    return this.chainManager.longestChainTipID;
   }
 
   async onChainTipMessage(msg: ChainTipMessage) {
@@ -160,9 +169,27 @@ export class PeerHandler {
       try {
         await this.objectManager.objectIO.fetchObject(msg.blockid);
       } catch {
-        logger.warn(`Could not fetch chain tip with block id ${msg.blockid}`);
+        this.connIO.disconnectWithError(`Invalid chain tip: could not fetch chain tip with block id ${msg.blockid}`);
       }
     }
+  }
+
+  async onMempoolMessage(msg: MempoolMessage){
+    let txids = msg.txids;
+    for(let txid of txids){
+      if (!this.objectManager.objectIO.objectExists(txid)) {
+        try {
+          await this.objectManager.objectIO.fetchObject(txid);
+        } catch {
+          this.connIO.disconnectWithError(`Invalid mempool: could not fetch tx ${txid} as specified in mempool`);
+          return;
+        }
+      }
+    }
+  }
+
+  async onGetMempoolMessage() {
+    this.connIO.writeToSocket({type: "mempool", txids: await (await this.chainManager.getMempool()).map(([txid, _]) => txid)})
   }
 
   echo(msg: Message) {

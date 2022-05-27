@@ -8,7 +8,6 @@ import {
   NonCoinbaseTransaction,
   NonCoinbaseTransactionRecord,
   Transaction,
-  TxOutpoint,
 } from "../types/transactions";
 import {
   BLOCK_REWARD,
@@ -16,11 +15,9 @@ import {
   GENESIS_BLOCKID,
   TARGET,
 } from "../config";
-import { getObjectID, genSignatureNulledTransaction, verifySig } from "./util";
+import { getObjectID, genSignatureNulledTransaction, verifySig, isASCIIPrintable } from "./util";
 import { ObjectIO } from "./objectio";
-import { UTXOIO } from "./utxoio";
-import Level from "level-ts";
-import { Hex32 } from "../types/primitives";
+import { ChainManager } from "./chainmanager";
 
 export enum ObjectValidationResult {
   Rejected,
@@ -28,41 +25,13 @@ export enum ObjectValidationResult {
   NewAndValid
 }
 
-export const deriveNewUTXOSet = async (txs: Array<Transaction>, utxoSet: Set<string>): Promise<Set<string> | null> => {
-  let currentUTXOSet = new Set(utxoSet);
-  for (const tx of txs) {
-     if (NonCoinbaseTransactionRecord.guard(tx)) {
-       // Verify that all outpoints are unspent
-       for (const input of tx.inputs) {
-         const outpointHash = getObjectID(input.outpoint);
-         if (!currentUTXOSet.has(outpointHash)) {
-           logger.warn(`Transaction ${getObjectID(tx)} refers to UTXO not in set/double spend`);
-           return null;
-         }
-         // Remove outpoint from UTXO set
-         currentUTXOSet.delete(outpointHash);
-       }
-     }
-     for (let j = 0; j < tx.outputs.length; j++) {
-       const outpoint = { txid: getObjectID(tx), index: j } as TxOutpoint
-       const outpointHash = getObjectID(outpoint);
-       currentUTXOSet.add(outpointHash);
-     }
-  }
-  return currentUTXOSet;
-}
-
 export class ObjectManager {
   objectIO: ObjectIO;
-  utxoIO: UTXOIO;
-  blockHeightDB: Level;
-  longestChainTipID: Hex32 | null;
+  chainManager: ChainManager;
 
-  constructor(objectIO: ObjectIO, utxoIO: UTXOIO, blockHeightDB: Level) {
+  constructor(objectIO: ObjectIO, chainManager: ChainManager) {
     this.objectIO = objectIO;
-    this.utxoIO = utxoIO;
-    this.blockHeightDB = blockHeightDB;
-    this.longestChainTipID = null;
+    this.chainManager = chainManager;
   }
 
   async initWithGenesisBlock() {
@@ -72,17 +41,8 @@ export class ObjectManager {
     if (!(await this.objectIO.objectExists(GENESIS_BLOCKID))) {
       await this.objectIO.storeObject(GENESIS);
     }
-    this.utxoIO.storeUTXOSet(GENESIS_BLOCKID, new Set());
-    this.blockHeightDB.put(GENESIS_BLOCKID, 0);
-  }
-
-  async initLongestChain() {
-    const blockHeights = await this.blockHeightDB.stream({});
-    for (const { key, value } of blockHeights) {
-      if (this.longestChainTipID === null || value > await this.blockHeightDB.get(this.longestChainTipID) ) {
-        this.longestChainTipID = key;
-      }
-    }
+    this.chainManager.utxoIO.storeUTXOSet(GENESIS_BLOCKID, new Set());
+    this.chainManager.blockHeightDB.put(GENESIS_BLOCKID, 0);
   }
 
   async tryStoreObject(obj: Object): Promise<ObjectValidationResult> {
@@ -93,23 +53,25 @@ export class ObjectManager {
       return ObjectValidationResult.ObjectExists;
     }
 
+
     if (BlockRecord.guard(obj)) {
-      // Store UTXOs
-      const prevUTXOSet = await this.utxoIO.getUTXOSet(obj.previd);
-      const blockTxs = await Promise.all(obj.txids.map(async (txid) => (await this.objectIO.getObject(txid)) as Transaction));
-      const newUTXOSet = await deriveNewUTXOSet(blockTxs, prevUTXOSet);
-      this.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
-
-      // Store block height
-      const blockHeight = (await this.blockHeightDB.get(obj.previd)) + 1;
-      this.blockHeightDB.put(getObjectID(obj), blockHeight);
-
-      // Set chain tip if needed
-      if (blockHeight > await this.blockHeightDB.get(this.longestChainTipID)) {
-        this.longestChainTipID = getObjectID(obj);
+      this.objectIO.storeObject(obj);
+      // Update block height, UTXOs, and chain tip
+      const newUTXOSet = await this.chainManager.getNewUTXOSet(obj);
+      await this.chainManager.utxoIO.storeUTXOSet(getObjectID(obj), newUTXOSet);
+      await this.chainManager.newBlock(obj);
+    } else {
+      if (NonCoinbaseTransactionRecord.guard(obj)) {
+        if (!this.objectIO.objectPending(getObjectID(obj))) {
+          const addTxResult = this.chainManager.addTxToMempool(obj);
+          if (!addTxResult) {
+            logger.warn("Failed to add transaction to mempool");
+            return ObjectValidationResult.Rejected;
+          }
+        }
       }
+      this.objectIO.storeObject(obj);
     }
-    this.objectIO.storeObject(obj);
 
     return ObjectValidationResult.NewAndValid;
   }
@@ -144,6 +106,8 @@ export class ObjectManager {
     let sumInputs = 0;
     let sumOutputs = 0;
 
+    let outpointSet = new Set();
+
     // Check inputs
     for (const input of tx.inputs) {
       // Check outpoint
@@ -164,6 +128,12 @@ export class ObjectManager {
         logger.warn(`Outpoint's index ${input.outpoint.index} does not exist`);
         return false;
       }
+
+      // Check that transaction does not have multiple inputs with the same outpoint
+      if(outpointSet.has(input.outpoint.txid + input.outpoint.index.toString())){
+        return false;
+      }
+      outpointSet.add(input.outpoint.txid + input.outpoint.index.toString());
 
       const pubkey = outpointTx.outputs[input.outpoint.index].pubkey;
       const sigVerified = await verifySig(
@@ -284,28 +254,40 @@ export class ObjectManager {
     }
 
     // Sanity check that the UTXO for the previd exists
-    if (!await this.utxoIO.UTXOExists(block.previd)) {
+    if (!await this.chainManager.utxoIO.UTXOExists(block.previd)) {
       logger.warn(`Internal error!!! UTXO set does not exist for previd ${block.previd}`);
       return false;
     }
 
     // Sanity check that the block height for the previd exists
-    if (!await this.blockHeightDB.exists(block.previd)) {
+    if (!await this.chainManager.blockHeightDB.exists(block.previd)) {
       logger.warn(`Internal error!!! Block height does not exist for previd ${block.previd}`);
       return false;
     }
 
-    if (coinbaseTx !== undefined && coinbaseTx.height !== (await this.blockHeightDB.get(block.previd)) + 1) {
+    if (coinbaseTx !== undefined && coinbaseTx.height !== (await this.chainManager.blockHeightDB.get(block.previd)) + 1) {
       logger.warn("Coinbase transaction has invalid height");
       return false;
     }
 
-    // Let currentUTXOSet be the previous UTXO set (starting from the last unfetched block)
-    const prevUTXOSet = await this.utxoIO.getUTXOSet(block.previd);
-    const blockTxs = await Promise.all(block.txids.map(async (txid) => (await this.objectIO.getObject(txid)) as Transaction));
-    const newUTXOSet = await deriveNewUTXOSet(blockTxs, prevUTXOSet);
-    if (newUTXOSet === null) {
-      logger.warn("Block has txs inconsistent with UTXO set");
+    // Validate that note and miner are ASCII-printable
+    if(block.miner !== undefined){ 
+      if(!isASCIIPrintable(block.miner) || block.miner.length > 128){
+        logger.warn("Miner field invalid");
+        return false;
+      }
+    }
+
+    if(block.note !== undefined){
+      if(!isASCIIPrintable(block.note) || block.note.length > 128){
+        logger.warn("Note field invalid");
+        return false;
+      }
+    }
+
+    // Check UTXO consistency
+    if (await this.chainManager.getNewUTXOSet(block) === null) {
+      logger.warn("Inconsistent UTXOs");
       return false;
     }
     return true;
